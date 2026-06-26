@@ -50,6 +50,7 @@ export interface BmdMeasurement {
   confidence: number | null;
   exposure_corrected: boolean;
   gradcam_path: string | null;
+  l4_crop_path: string | null;
   model_version: string | null;
   computed_at: string;
   segments: VertebraSegment[];
@@ -58,6 +59,7 @@ export interface BmdMeasurement {
 
 export interface XrayStudyListItem {
   id: string;
+  original_filename: string | null;
   acquired_at: string | null;
   uploaded_at: string;
   status: StudyStatus;
@@ -70,6 +72,10 @@ export interface XrayStudyDetail {
   id: string;
   patient_id: string;
   dicom_path: string;
+  original_filename: string | null;
+  dicom_meta: string | null;
+  note: string | null;
+  note_updated_at: string | null;
   preview_path: string | null;
   acquired_at: string | null;
   modality: string | null;

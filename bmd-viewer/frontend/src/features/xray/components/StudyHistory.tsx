@@ -1,33 +1,64 @@
-// 환자 상세: X-ray 이력 목록 + 업로드.
+// Patient detail: X-ray history list + upload + delete.
 import { useRef } from "react";
-import { useStudies, useUploadStudy } from "@/features/patients/api/queries";
+import {
+  useStudies,
+  useUploadStudy,
+  useDeleteStudy,
+} from "@/features/patients/api/queries";
 import type { XrayStudyListItem } from "@/lib/types";
 
 const statusLabel: Record<string, string> = {
-  uploaded: "대기",
-  processing: "분석 중",
-  completed: "완료",
-  failed: "실패",
+  uploaded: "Pending",
+  processing: "Analyzing",
+  completed: "Completed",
+  failed: "Failed",
 };
+
+// Full date-time: YYYY-MM-DD HH:MM:SS
+function fmtDateTime(iso: string): string {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+  );
+}
 
 interface Props {
   patientId: string;
   selectedStudyId?: string;
   onSelect: (s: XrayStudyListItem) => void;
+  onDeleted?: (id: string) => void;
 }
 
-export function StudyHistory({ patientId, selectedStudyId, onSelect }: Props) {
+export function StudyHistory({
+  patientId,
+  selectedStudyId,
+  onSelect,
+  onDeleted,
+}: Props) {
   const { data } = useStudies(patientId);
   const upload = useUploadStudy(patientId);
+  const del = useDeleteStudy(patientId);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleDelete = (e: React.MouseEvent, s: XrayStudyListItem) => {
+    e.stopPropagation();
+    const ok = window.confirm(
+      `Delete this X-ray study?\n` +
+        `${s.original_filename ?? s.id}\n` +
+        `Uploaded ${fmtDateTime(s.uploaded_at)}\n` +
+        `This will permanently remove the image and its measurement.`
+    );
+    if (!ok) return;
+    del.mutate(s.id, { onSuccess: () => onDeleted?.(s.id) });
+  };
 
   return (
     <div className="study-history">
       <div className="toolbar">
-        <h3>X-ray 이력</h3>
-        <button onClick={() => fileRef.current?.click()}>
-          DICOM 업로드
-        </button>
+        <h3>X-ray History</h3>
+        <button onClick={() => fileRef.current?.click()}>Upload DICOM</button>
         <input
           ref={fileRef}
           type="file"
@@ -36,10 +67,11 @@ export function StudyHistory({ patientId, selectedStudyId, onSelect }: Props) {
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) upload.mutate(f);
+            e.target.value = "";
           }}
         />
       </div>
-      {upload.isPending && <p className="muted">업로드 중…</p>}
+      {upload.isPending && <p className="muted">Uploading…</p>}
       <ul>
         {data?.map((s) => (
           <li
@@ -47,15 +79,29 @@ export function StudyHistory({ patientId, selectedStudyId, onSelect }: Props) {
             className={s.id === selectedStudyId ? "selected" : ""}
             onClick={() => onSelect(s)}
           >
-            <span className="date">
-              {new Date(s.uploaded_at).toLocaleDateString()}
-            </span>
-            <span className={`status status-${s.status}`}>
-              {statusLabel[s.status]}
-            </span>
-            <span className="bmd">
-              {s.bmd_value != null ? `BMD ${s.bmd_value.toFixed(3)}` : "—"}
-            </span>
+            <div className="study-row-top">
+              <span className="datetime">{fmtDateTime(s.uploaded_at)}</span>
+              <button
+                className="row-delete"
+                title="Delete study"
+                onClick={(e) => handleDelete(e, s)}
+              >
+                🗑
+              </button>
+            </div>
+            <div className="study-row-bottom">
+              <span className={`status status-${s.status}`}>
+                {statusLabel[s.status]}
+              </span>
+              <span className="bmd">
+                {s.bmd_value != null ? `BMD ${s.bmd_value.toFixed(3)}` : "—"}
+              </span>
+              {s.original_filename && (
+                <span className="fname" title={s.original_filename}>
+                  {s.original_filename}
+                </span>
+              )}
+            </div>
           </li>
         ))}
       </ul>

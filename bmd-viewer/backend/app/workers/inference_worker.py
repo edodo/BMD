@@ -42,6 +42,21 @@ async def process_study(study_id: str) -> None:
             # 스터디 메타 갱신
             study.preview_path = result.preview_path
             study.modality = result.modality
+            if result.acquired_at:
+                from datetime import datetime
+
+                try:
+                    study.acquired_at = datetime.fromisoformat(
+                        result.acquired_at
+                    )
+                except ValueError:
+                    pass
+            if result.dicom_meta:
+                import json
+
+                study.dicom_meta = json.dumps(
+                    result.dicom_meta, ensure_ascii=False
+                )
 
             measurement = BmdMeasurement(
                 study_id=study.id,
@@ -52,6 +67,7 @@ async def process_study(study_id: str) -> None:
                 confidence=result.confidence,
                 exposure_corrected=result.exposure_corrected,
                 gradcam_path=result.gradcam_path,
+                l4_crop_path=result.l4_crop_path,
                 model_version=result.model_version,
             )
             measurement.segments = [

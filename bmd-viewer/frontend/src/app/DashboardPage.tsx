@@ -1,4 +1,4 @@
-// 메인 대시보드: 환자 리스트 → 환자 상세(이력) → 스터디 뷰어 + 추세.
+// Main dashboard: patient list → patient detail (history) → study viewer + trend.
 import { useState } from "react";
 import { PatientList } from "@/features/patients/components/PatientList";
 import { StudyHistory } from "@/features/xray/components/StudyHistory";
@@ -19,6 +19,12 @@ export function DashboardPage() {
             setPatient(p);
             setStudyId(undefined);
           }}
+          onDeleted={(id) => {
+            if (patient?.id === id) {
+              setPatient(undefined);
+              setStudyId(undefined);
+            }
+          }}
         />
       </aside>
 
@@ -33,6 +39,9 @@ export function DashboardPage() {
               patientId={patient.id}
               selectedStudyId={studyId}
               onSelect={(s: XrayStudyListItem) => setStudyId(s.id)}
+              onDeleted={(id) => {
+                if (studyId === id) setStudyId(undefined);
+              }}
             />
             <BmdTrendChart patientId={patient.id} />
           </section>
@@ -42,13 +51,13 @@ export function DashboardPage() {
               <XrayViewer studyId={studyId} />
             ) : (
               <div className="viewer empty">
-                X-ray를 선택하면 분석 결과가 표시됩니다.
+                Select an X-ray to view analysis results.
               </div>
             )}
           </main>
         </>
       ) : (
-        <div className="col placeholder-col">환자를 선택하세요.</div>
+        <div className="col placeholder-col">Select a patient.</div>
       )}
     </div>
   );

@@ -45,10 +45,12 @@ class InferenceResult:
     model_version: str | None = None
     preview_path: str | None = None      # DICOM → PNG 변환 결과
     gradcam_path: str | None = None      # 설명성 오버레이
+    l4_crop_path: str | None = None      # 추출된 L4 크롭 이미지
     segments: list[SegmentResult] = field(default_factory=list)
     xai_factors: list[XaiResult] = field(default_factory=list)
     acquired_at: str | None = None       # DICOM 메타에서 추출
     modality: str | None = None
+    dicom_meta: dict | None = None       # 추가 DICOM 태그
 
 
 class BmdInferenceEngine(abc.ABC):

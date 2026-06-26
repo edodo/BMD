@@ -58,3 +58,52 @@ export function useUploadStudy(patientId: string) {
     },
   });
 }
+
+export function useCreatePatient() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      medical_record_no: string;
+      full_name: string;
+      sex?: string | null;
+      birth_date?: string | null;
+      notes?: string | null;
+    }) => dp.createPatient(input),
+    onSuccess: () => {
+      // 모든 환자 목록 쿼리 갱신 (검색어별 캐시 포함)
+      qc.invalidateQueries({ queryKey: ["patients"] });
+    },
+  });
+}
+
+export function useDeletePatient() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patientId: string) => dp.deletePatient(patientId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["patients"] });
+    },
+  });
+}
+
+export function useDeleteStudy(patientId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (studyId: string) => dp.deleteStudy(studyId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["studies", patientId] });
+      qc.invalidateQueries({ queryKey: ["bmd-trend", patientId] });
+      qc.invalidateQueries({ queryKey: ["patients"] });
+    },
+  });
+}
+
+export function useUpdateStudyNote(studyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (note: string) => dp.updateStudyNote(studyId, note),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["study", studyId] });
+    },
+  });
+}

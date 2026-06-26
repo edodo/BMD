@@ -14,11 +14,11 @@ import { useBmdTrend } from "@/features/patients/api/queries";
 export function BmdTrendChart({ patientId }: { patientId: string }) {
   const { data } = useBmdTrend(patientId);
   if (!data || data.points.length === 0) {
-    return <div className="trend empty">측정 데이터가 없습니다.</div>;
+    return <div className="trend empty">No measurement data yet.</div>;
   }
 
   const chartData = data.points.map((p) => ({
-    date: new Date(p.measured_at).toLocaleDateString(),
+    date: new Date(p.measured_at).toLocaleDateString("en-CA"),
     bmd: p.bmd_value,
     t: p.t_score,
   }));
@@ -26,7 +26,7 @@ export function BmdTrendChart({ patientId }: { patientId: string }) {
   return (
     <div className="trend">
       <div className="trend-header">
-        <h3>{data.target_vertebra} 골밀도 변화</h3>
+        <h3>{data.target_vertebra} Bone Density Trend</h3>
         {data.delta_percent != null && (
           <span
             className={`delta ${data.delta_percent >= 0 ? "up" : "down"}`}

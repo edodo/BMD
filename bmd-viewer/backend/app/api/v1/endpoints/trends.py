@@ -23,7 +23,7 @@ async def bmd_trend(
     """환자의 L4 BMD 시계열과 변화량 요약."""
     patient = await db.get(Patient, patient_id)
     if not patient or patient.doctor_id != doctor.id:
-        raise HTTPException(status_code=404, detail="환자를 찾을 수 없습니다")
+        raise HTTPException(status_code=404, detail="Patient not found")
 
     rows = (
         await db.execute(

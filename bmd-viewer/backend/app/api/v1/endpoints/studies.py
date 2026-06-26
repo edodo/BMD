@@ -26,7 +26,7 @@ from app.models import (
     StudyStatus,
     XrayStudy,
 )
-from app.schemas import XrayStudyDetail, XrayStudyListItem
+from app.schemas import StudyNoteUpdate, XrayStudyDetail, XrayStudyListItem
 from app.workers.inference_worker import process_study
 
 router = APIRouter()
@@ -37,7 +37,7 @@ async def _assert_owns_patient(
 ) -> Patient:
     patient = await db.get(Patient, patient_id)
     if not patient or patient.doctor_id != doctor.id:
-        raise HTTPException(status_code=404, detail="환자를 찾을 수 없습니다")
+        raise HTTPException(status_code=404, detail="Patient not found")
     return patient
 
 
@@ -61,6 +61,7 @@ async def list_studies(
     return [
         XrayStudyListItem(
             id=s.id,
+            original_filename=s.original_filename,
             acquired_at=s.acquired_at,
             uploaded_at=s.uploaded_at,
             status=s.status,
@@ -96,6 +97,7 @@ async def upload_study(
         id=study_id,
         patient_id=patient_id,
         dicom_path=rel_path,
+        original_filename=file.filename,
         status=StudyStatus.UPLOADED,
     )
     db.add(study)
@@ -109,9 +111,13 @@ async def upload_study(
         id=study.id,
         patient_id=study.patient_id,
         dicom_path=study.dicom_path,
+        original_filename=study.original_filename,
         preview_path=study.preview_path,
         acquired_at=study.acquired_at,
         modality=study.modality,
+        dicom_meta=study.dicom_meta,
+        note=study.note,
+        note_updated_at=study.note_updated_at,
         status=study.status,
         error_message=study.error_message,
         uploaded_at=study.uploaded_at,
@@ -139,6 +145,71 @@ async def get_study(
         )
     )
     if not study:
-        raise HTTPException(status_code=404, detail="스터디를 찾을 수 없습니다")
+        raise HTTPException(status_code=404, detail="Study not found")
     await _assert_owns_patient(db, doctor, study.patient_id)
     return study
+
+@router.patch("/studies/{study_id}/note", response_model=XrayStudyDetail)
+async def update_study_note(
+    study_id: str,
+    payload: StudyNoteUpdate,
+    doctor: Doctor = Depends(get_current_doctor),
+    db: AsyncSession = Depends(get_db),
+):
+    """스터디(이력)별 의사 메모 저장/수정."""
+    study = await db.get(XrayStudy, study_id)
+    if not study:
+        raise HTTPException(status_code=404, detail="Study not found")
+    await _assert_owns_patient(db, doctor, study.patient_id)
+    from datetime import datetime, timezone
+
+    study.note = payload.note
+    study.note_updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    # 상세 재조회 (관계 포함)
+    study = await db.scalar(
+        select(XrayStudy)
+        .where(XrayStudy.id == study_id)
+        .options(
+            selectinload(XrayStudy.measurement).selectinload(
+                BmdMeasurement.segments
+            ),
+            selectinload(XrayStudy.measurement).selectinload(
+                BmdMeasurement.xai_factors
+            ),
+        )
+    )
+    return study
+
+
+@router.delete("/studies/{study_id}", status_code=204)
+async def delete_study(
+    study_id: str,
+    doctor: Doctor = Depends(get_current_doctor),
+    db: AsyncSession = Depends(get_db),
+):
+    """X-ray 스터디(이력) 삭제. 원본 DICOM과 파생 산출물 파일도 정리."""
+    study = await db.get(XrayStudy, study_id)
+    if not study:
+        raise HTTPException(status_code=404, detail="Study not found")
+    await _assert_owns_patient(db, doctor, study.patient_id)
+
+    # 파일 정리 (원본 DICOM + 파생 디렉토리)
+    import shutil
+
+    try:
+        dcm = settings.dicom_dir / study.dicom_path
+        if dcm.exists():
+            dcm.unlink()
+    except OSError:
+        pass
+    try:
+        derived = settings.derived_dir / study.id
+        if derived.exists():
+            shutil.rmtree(derived, ignore_errors=True)
+    except OSError:
+        pass
+
+    await db.delete(study)  # measurement/segments/xai는 cascade로 삭제
+    await db.commit()
+    return None

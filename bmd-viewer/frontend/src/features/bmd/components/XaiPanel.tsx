@@ -9,8 +9,8 @@ export function XaiPanel({ factors }: { factors: XaiFactor[] }) {
 
   return (
     <div className="xai-panel">
-      <h4>판단 근거 (XAI)</h4>
-      <p className="muted">골밀도 값에 영향을 준 항목</p>
+      <h4>Basis for Judgment (XAI)</h4>
+      <p className="muted">Factors affecting the bone density value</p>
       <ul>
         {sorted.map((f) => {
           const pct = (Math.abs(f.contribution) / max) * 100;

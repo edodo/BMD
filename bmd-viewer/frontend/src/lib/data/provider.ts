@@ -14,16 +14,27 @@ import type {
 export interface DataProvider {
   // 인증
   login(email: string, password: string): Promise<AuthSession>;
+  register(input: {
+    email: string;
+    password: string;
+    full_name: string;
+    role?: string;
+  }): Promise<void>;
+  logout(): void;
+  isAuthenticated(): boolean;
 
   // 환자
   listPatients(query?: string): Promise<PatientListItem[]>;
   getPatient(id: string): Promise<Patient>;
   createPatient(input: Partial<Patient>): Promise<Patient>;
+  deletePatient(id: string): Promise<void>;
 
   // X-ray 스터디
   listStudies(patientId: string): Promise<XrayStudyListItem[]>;
   uploadStudy(patientId: string, file: File): Promise<XrayStudyDetail>;
   getStudy(studyId: string): Promise<XrayStudyDetail>;
+  deleteStudy(studyId: string): Promise<void>;
+  updateStudyNote(studyId: string, note: string): Promise<XrayStudyDetail>;
 
   // BMD 추세
   getBmdTrend(patientId: string): Promise<BmdTrend>;

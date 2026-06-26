@@ -105,6 +105,7 @@ class BmdMeasurementOut(ORMBase):
     confidence: float | None
     exposure_corrected: bool
     gradcam_path: str | None
+    l4_crop_path: str | None = None
     model_version: str | None
     computed_at: datetime
     segments: list[VertebraSegmentOut] = []
@@ -116,6 +117,7 @@ class XrayStudyListItem(ORMBase):
     """환자 상세의 X-ray 이력 목록용."""
 
     id: str
+    original_filename: str | None = None
     acquired_at: datetime | None
     uploaded_at: datetime
     status: StudyStatus
@@ -124,15 +126,23 @@ class XrayStudyListItem(ORMBase):
     bmd_value: float | None = None  # 완료된 경우만
 
 
+class StudyNoteUpdate(BaseModel):
+    note: str | None = None
+
+
 class XrayStudyDetail(ORMBase):
     """스터디 선택 시 상세 (원본 + 분할 + BMD)."""
 
     id: str
     patient_id: str
     dicom_path: str
+    original_filename: str | None = None
     preview_path: str | None
     acquired_at: datetime | None
     modality: str | None
+    dicom_meta: str | None = None
+    note: str | None = None
+    note_updated_at: datetime | None = None
     status: StudyStatus
     error_message: str | None
     uploaded_at: datetime

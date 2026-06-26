@@ -112,12 +112,25 @@ class XrayStudy(Base):
 
     # 원본 DICOM 저장 경로 (storage/dicom 기준 상대경로)
     dicom_path: Mapped[str] = mapped_column(String(512))
+    # 업로드된 원본 파일명 (화면 표시용)
+    original_filename: Mapped[str | None] = mapped_column(
+        String(512), nullable=True
+    )
     # 화면 표시용 변환 이미지 (PNG) 경로
     preview_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     # DICOM 메타데이터 (촬영일 등)
     acquired_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     modality: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # 추가 DICOM 태그 (JSON 문자열로 저장: 환자정보/장비/해상도 등)
+    dicom_meta: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # 의사가 이 스터디에 작성하는 메모
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 메모 최종 작성/수정 일시
+    note_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     status: Mapped[StudyStatus] = mapped_column(
         Enum(StudyStatus), default=StudyStatus.UPLOADED, index=True
@@ -160,6 +173,8 @@ class BmdMeasurement(Base):
 
     # Grad-CAM 등 설명성 오버레이 이미지 경로
     gradcam_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # 추출된 L4 척추체 크롭 이미지 경로 (크게 보여주기용)
+    l4_crop_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     computed_at: Mapped[datetime] = mapped_column(

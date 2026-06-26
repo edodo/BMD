@@ -20,7 +20,7 @@ async def register(payload: DoctorCreate, db: AsyncSession = Depends(get_db)):
         select(Doctor).where(Doctor.email == payload.email)
     )
     if existing:
-        raise HTTPException(status_code=400, detail="이미 등록된 이메일")
+        raise HTTPException(status_code=400, detail="Email already registered")
     doctor = Doctor(
         email=payload.email,
         hashed_password=hash_password(payload.password),
@@ -44,7 +44,7 @@ async def login(
     if not doctor or not verify_password(form.password, doctor.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="이메일 또는 비밀번호가 올바르지 않습니다",
+            detail="Incorrect email or password",
         )
     token = create_access_token(subject=doctor.id, role=doctor.role.value)
     return Token(access_token=token)

@@ -23,12 +23,12 @@ async def get_current_doctor(
     if payload is None or "sub" not in payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="유효하지 않은 인증 정보",
+            detail="Invalid authentication credentials",
         )
     doctor = await db.get(Doctor, payload["sub"])
     if doctor is None:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="사용자 없음"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
         )
     return doctor
 
@@ -42,7 +42,7 @@ def require_roles(*roles: UserRole):
         if roles and doctor.role not in roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="권한 부족",
+                detail="Insufficient permissions",
             )
         return doctor
 

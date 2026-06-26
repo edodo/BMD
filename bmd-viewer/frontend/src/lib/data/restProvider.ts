@@ -22,6 +22,21 @@ export class RestDataProvider implements DataProvider {
       if (token) config.headers.Authorization = `Bearer ${token}`;
       return config;
     });
+    // 인증 만료(401) 시 토큰 제거 후 로그인 화면으로
+    this.http.interceptors.response.use(
+      (res) => res,
+      (err) => {
+        const status = err?.response?.status;
+        const url: string = err?.config?.url ?? "";
+        // 로그인 시도 자체의 401은 폼에서 처리하므로 제외
+        if (status === 401 && !url.includes("/auth/login")) {
+          localStorage.removeItem("bmd_token");
+          // 컨텍스트가 상태를 못 받으므로 새로고침으로 게이트 재평가
+          if (typeof window !== "undefined") window.location.reload();
+        }
+        return Promise.reject(err);
+      }
+    );
   }
 
   async login(email: string, password: string): Promise<AuthSession> {
@@ -32,6 +47,28 @@ export class RestDataProvider implements DataProvider {
     const { data } = await this.http.post<AuthSession>("/auth/login", form);
     localStorage.setItem("bmd_token", data.access_token);
     return data;
+  }
+
+  async register(input: {
+    email: string;
+    password: string;
+    full_name: string;
+    role?: string;
+  }): Promise<void> {
+    await this.http.post("/auth/register", {
+      email: input.email,
+      password: input.password,
+      full_name: input.full_name,
+      role: input.role ?? "doctor",
+    });
+  }
+
+  logout(): void {
+    localStorage.removeItem("bmd_token");
+  }
+
+  isAuthenticated(): boolean {
+    return !!localStorage.getItem("bmd_token");
   }
 
   async listPatients(query?: string): Promise<PatientListItem[]> {
@@ -49,6 +86,10 @@ export class RestDataProvider implements DataProvider {
   async createPatient(input: Partial<Patient>): Promise<Patient> {
     const { data } = await this.http.post<Patient>("/patients", input);
     return data;
+  }
+
+  async deletePatient(id: string): Promise<void> {
+    await this.http.delete(`/patients/${id}`);
   }
 
   async listStudies(patientId: string): Promise<XrayStudyListItem[]> {
@@ -70,6 +111,21 @@ export class RestDataProvider implements DataProvider {
 
   async getStudy(studyId: string): Promise<XrayStudyDetail> {
     const { data } = await this.http.get<XrayStudyDetail>(`/studies/${studyId}`);
+    return data;
+  }
+
+  async deleteStudy(studyId: string): Promise<void> {
+    await this.http.delete(`/studies/${studyId}`);
+  }
+
+  async updateStudyNote(
+    studyId: string,
+    note: string
+  ): Promise<XrayStudyDetail> {
+    const { data } = await this.http.patch<XrayStudyDetail>(
+      `/studies/${studyId}/note`,
+      { note }
+    );
     return data;
   }
 
