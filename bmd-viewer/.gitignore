@@ -1,12 +1,7 @@
 # Python
 __pycache__/
-*.pyc
+
 .venv/
-backend/storage/*.db
-backend/storage/dicom/
-backend/storage/derived/
-backend/ml_models/*.pt
-backend/ml_models/*.pth
 .env
 
 # Node
