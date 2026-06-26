@@ -1,0 +1,156 @@
+"""API 입출력 스키마 (Pydantic v2).
+
+ORM 모델과 분리하여 API 계약을 명시적으로 관리한다.
+프론트엔드 타입(lib/types)과 1:1로 대응하도록 유지한다.
+"""
+from __future__ import annotations
+
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+from app.models import StudyStatus, UserRole
+
+
+# ---------- 공통 ----------
+class ORMBase(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ---------- 인증 ----------
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class DoctorCreate(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8)
+    full_name: str
+    role: UserRole = UserRole.DOCTOR
+
+
+class DoctorOut(ORMBase):
+    id: str
+    email: EmailStr
+    full_name: str
+    role: UserRole
+    created_at: datetime
+
+
+# ---------- 환자 ----------
+class PatientCreate(BaseModel):
+    medical_record_no: str
+    full_name: str
+    birth_date: datetime | None = None
+    sex: str | None = None
+    notes: str | None = None
+
+
+class PatientUpdate(BaseModel):
+    full_name: str | None = None
+    birth_date: datetime | None = None
+    sex: str | None = None
+    notes: str | None = None
+
+
+class PatientOut(ORMBase):
+    id: str
+    medical_record_no: str
+    full_name: str
+    birth_date: datetime | None
+    sex: str | None
+    notes: str | None
+    created_at: datetime
+
+
+class PatientListItem(ORMBase):
+    """리스트/검색 화면용 경량 표현."""
+
+    id: str
+    medical_record_no: str
+    full_name: str
+    sex: str | None
+    # 최근 BMD 값 (목록에서 빠르게 확인)
+    latest_bmd: float | None = None
+    study_count: int = 0
+
+
+# ---------- 척추 분할 / XAI ----------
+class VertebraSegmentOut(ORMBase):
+    label: str
+    is_target: bool
+    bbox_x: float
+    bbox_y: float
+    bbox_w: float
+    bbox_h: float
+    mask_path: str | None
+    mean_intensity: float | None
+
+
+class XaiFactorOut(ORMBase):
+    label: str
+    contribution: float
+    description: str | None
+    rank: int
+
+
+# ---------- BMD 측정 ----------
+class BmdMeasurementOut(ORMBase):
+    id: str
+    target_vertebra: str
+    bmd_value: float
+    t_score: float | None
+    z_score: float | None
+    confidence: float | None
+    exposure_corrected: bool
+    gradcam_path: str | None
+    model_version: str | None
+    computed_at: datetime
+    segments: list[VertebraSegmentOut] = []
+    xai_factors: list[XaiFactorOut] = []
+
+
+# ---------- X-ray 스터디 ----------
+class XrayStudyListItem(ORMBase):
+    """환자 상세의 X-ray 이력 목록용."""
+
+    id: str
+    acquired_at: datetime | None
+    uploaded_at: datetime
+    status: StudyStatus
+    modality: str | None
+    preview_path: str | None
+    bmd_value: float | None = None  # 완료된 경우만
+
+
+class XrayStudyDetail(ORMBase):
+    """스터디 선택 시 상세 (원본 + 분할 + BMD)."""
+
+    id: str
+    patient_id: str
+    dicom_path: str
+    preview_path: str | None
+    acquired_at: datetime | None
+    modality: str | None
+    status: StudyStatus
+    error_message: str | None
+    uploaded_at: datetime
+    measurement: BmdMeasurementOut | None = None
+
+
+# ---------- 추세 차트 ----------
+class BmdTrendPoint(BaseModel):
+    study_id: str
+    measured_at: datetime
+    bmd_value: float
+    t_score: float | None = None
+
+
+class BmdTrendOut(BaseModel):
+    patient_id: str
+    target_vertebra: str
+    points: list[BmdTrendPoint]
+    # 변화량 요약
+    delta_absolute: float | None = None     # 최신 - 최초
+    delta_percent: float | None = None

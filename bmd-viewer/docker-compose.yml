@@ -1,0 +1,28 @@
+# BMD Viewer - 백엔드 + 프론트엔드 통합 실행.
+# 클라우드 배포 시 이 compose를 기반으로 각 서비스 이미지를 푸시하면 된다.
+services:
+  backend:
+    build: ./backend
+    environment:
+      BMD_DEBUG: "false"
+      BMD_SECRET_KEY: "${BMD_SECRET_KEY:-change-me}"
+      BMD_DATABASE_URL: "sqlite+aiosqlite:///./storage/bmd.db"
+      BMD_CORS_ORIGINS: '["http://localhost"]'
+      BMD_INFERENCE_DEVICE: "cpu"
+    volumes:
+      - bmd-storage:/app/storage
+      - ./backend/ml_models:/app/ml_models:ro
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    restart: unless-stopped
+
+volumes:
+  bmd-storage:
