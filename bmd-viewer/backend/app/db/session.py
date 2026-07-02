@@ -80,6 +80,11 @@ def _apply_lightweight_migrations(conn) -> None:
     additions = {
         "xai_overlay_path": "VARCHAR(512)",
         "xai_l4_cam_path": "VARCHAR(512)",
+        "density_low": "FLOAT",
+        "density_high": "FLOAT",
+        "roi_mean_intensity": "FLOAT",
+        "reliable": "BOOLEAN DEFAULT 1",
+        "reliability_warning": "TEXT",
     }
     for col, ddl in additions.items():
         if col not in existing:

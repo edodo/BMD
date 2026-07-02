@@ -70,6 +70,11 @@ async def process_study(study_id: str) -> None:
                 l4_crop_path=result.l4_crop_path,
                 xai_overlay_path=result.xai_overlay_path,
                 xai_l4_cam_path=result.xai_l4_cam_path,
+                density_low=result.density_low,
+                density_high=result.density_high,
+                roi_mean_intensity=result.roi_mean_attenuation,
+                reliable=result.reliable,
+                reliability_warning=result.reliability_warning,
                 model_version=result.model_version,
             )
             measurement.segments = [

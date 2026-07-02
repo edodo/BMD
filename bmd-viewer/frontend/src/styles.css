@@ -62,6 +62,15 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
 .placeholder { color: #64748b; display: grid; place-items: center; height: 200px; }
 .bmd-headline { display: flex; flex-direction: column; padding: 14px; background: var(--panel);
   border: 1px solid var(--border); border-radius: 10px; }
+/* 신뢰 불가(경계 잘림 등) 경고 배너 + 헤드라인 강조 */
+.bmd-warning { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px;
+  margin-bottom: 10px; background: #fef2f2; border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626; border-radius: 8px; color: #7f1d1d; }
+.bmd-warning-icon { font-size: 18px; line-height: 1.2; color: #dc2626; }
+.bmd-warning b { font-size: 13px; }
+.bmd-warning p { margin: 3px 0 0; font-size: 12px; color: #991b1b; }
+.bmd-headline.unreliable { border-color: #fecaca; background: #fff7f7; }
+.bmd-headline.unreliable .value { color: #b91c1c; }
 .bmd-headline .label { color: var(--muted); font-size: 12px; }
 .bmd-headline .value { font-size: 34px; font-weight: 700; }
 .bmd-headline .tscore { color: var(--accent); font-size: 13px; }
@@ -86,6 +95,42 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
   margin-top: 6px; font-size: 10px; }
 .xai-heatmap .bargrad { flex: 1; height: 8px; border-radius: 4px;
   background: linear-gradient(to right, #0000ff, #00ffff, #00ff00, #ffff00, #ff0000); }
+
+/* 밀도 게이지: 상단 말풍선(평균/BMD) + 관통 수직선 + 정상/골감소 존 + 그라데이션 바.
+   최솟값/최댓값은 작고 낮은 대비로만 표기. */
+.dens-gauge { position: relative; margin-top: 30px; }
+/* 상단 말풍선(★ Mean … BMD …) — 평균 위치에 배치 */
+.dens-gauge .dens-callout { position: absolute; top: -22px; transform: translateX(-50%);
+  white-space: nowrap; font-size: 11px; font-weight: 700; color: #0f172a;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+  padding: 2px 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); z-index: 3; }
+/* 존 가이드라인 + 바를 감싸는 트랙 (수직선이 이 높이를 관통) */
+.dens-gauge .dens-track { position: relative; }
+.dens-gauge .dens-needle { position: absolute; top: 0; bottom: 0; width: 2px;
+  margin-left: -1px; background: #0f172a; z-index: 2; }
+/* 수직선 상단에 아래로 찌르는 ▼ */
+.dens-gauge .dens-needle::before { content: ""; position: absolute; top: -4px;
+  left: 50%; transform: translateX(-50%);
+  border-left: 5px solid transparent; border-right: 5px solid transparent;
+  border-top: 6px solid #0f172a; }
+/* 정상/골감소 참고 존 (연한 점선 가이드라인) */
+.dens-gauge .dens-zoneline { position: relative; display: flex;
+  justify-content: space-between; align-items: center; height: 15px;
+  border-bottom: 1px dashed var(--border); }
+.dens-gauge .dens-zoneline .z { font-size: 9.5px; color: var(--muted); opacity: 0.7; }
+/* 존 경계(설정 임계값 위치) — 옅은 세로 구분선. 위치는 인라인 style(left)로 지정 */
+.dens-gauge .dens-zone-div { position: absolute; top: 0; bottom: 0;
+  width: 0; border-left: 1px dashed var(--muted); opacity: 0.4;
+  transform: translateX(-50%); }
+/* 그라데이션 바 */
+.dens-gauge .dens-bar { margin-top: 5px; }
+.dens-gauge .dens-bar .bargrad { display: block; width: 100%; height: 12px;
+  border-radius: 4px; }
+/* 최솟값 / 최댓값 — 텍스트 작게 + 대비 낮게 */
+.dens-gauge .dens-minmax { display: flex; justify-content: space-between;
+  margin-top: 4px; }
+.dens-gauge .dens-minmax span { font-size: 9px; color: var(--muted); opacity: 0.6; }
+.dens-gauge .dens-minmax em { font-style: normal; }
 .trend { margin-top: 20px; padding: 14px; background: var(--panel);
   border: 1px solid var(--border); border-radius: 10px; }
 .trend-header { display: flex; justify-content: space-between; align-items: center; }
@@ -158,6 +203,24 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
 .l4-crop-block img { width: 100%; max-width: 520px; border-radius: 8px;
   border: 1px solid var(--border); display: block; }
 
+/* Extracted L4 크롭 + Density basis 히트맵을 같은 크기로 나란히 배치.
+   왼쪽 컬럼: L4 크롭 위에 DICOM metadata를 바로 붙임. 오른쪽: density basis. */
+.l4-density-row { display: flex; gap: 16px; align-items: flex-start;
+  margin-top: 16px; flex-wrap: wrap; }
+.l4-density-row > * { flex: 1 1 320px; min-width: 0; margin-top: 0; }
+.l4-left-col { display: flex; flex-direction: column; }
+/* 컬럼 첫 요소는 상단 여백 제거해 density basis 제목과 높이를 맞춘다 */
+.l4-left-col .l4-crop-block { margin-top: 0; }
+/* DICOM metadata를 L4 크롭 바로 아래에 붙임(간격 축소) */
+.l4-left-col .dicom-meta { margin-top: 14px; }
+/* 두 이미지의 표시 크기를 동일하게: 각 컬럼 폭을 꽉 채움(동일 종횡비 → 동일 높이) */
+.l4-density-row .l4-crop-block img { max-width: none; }
+/* density-basis는 xai-heatmap 내부 스타일(컬러바·마커)을 재사용하되,
+   독립 패널이므로 상단 구분선/여백은 제거하고 제목을 L4 크롭과 맞춘다 */
+.l4-density-row .density-basis { padding-top: 0; border-top: none; }
+.l4-density-row .density-basis h4 { margin: 0 0 8px; font-size: 14px; }
+.l4-density-row .density-basis > img { width: 100%; }
+
 /* ---------- DICOM metadata (two-column key/value) ---------- */
 .dicom-meta { margin-top: 18px; }
 .dicom-meta h4 { margin: 0 0 10px; font-size: 14px; }
@@ -168,7 +231,7 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
 .dicom-meta dd { margin: 0; font-size: 13px; color: var(--text);
   font-variant-numeric: tabular-nums; word-break: break-all; }
 
-/* ---------- Notes (inside metadata block) ---------- */
+/* ---------- Notes (full-width, below the L4 crop / density row) ---------- */
 .study-note { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
 .note-header { display: flex; align-items: center; justify-content: space-between; }
 .note-header h4 { margin: 0 0 8px; font-size: 14px; }

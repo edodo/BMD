@@ -2,6 +2,7 @@
 import { useStudy } from "@/features/patients/api/queries";
 import { getDataProvider } from "@/lib/data";
 import { XaiPanel } from "@/features/bmd/components/XaiPanel";
+import { DensityBasis } from "@/features/bmd/components/DensityBasis";
 import { StudyNote } from "./StudyNote";
 
 const dp = getDataProvider();
@@ -83,39 +84,66 @@ export function XrayViewer({ studyId }: { studyId: string }) {
           )}
         </div>
 
-        {/* (5) Large extracted L4 crop below the original */}
-        {l4Crop && (
-          <div className="l4-crop-block">
-            <h4>Extracted L4 vertebra</h4>
-            <img src={`${l4Crop}?v=${study.id}`} alt="Extracted L4 crop" />
+        {/* (5) Left column (L4 crop + DICOM metadata) beside the density basis,
+             so the metadata sits right under the crop (no big gap). */}
+        <div className="l4-density-row">
+          <div className="l4-left-col">
+            {l4Crop && (
+              <div className="l4-crop-block">
+                <h4>Extracted L4 vertebra</h4>
+                <img src={`${l4Crop}?v=${study.id}`} alt="Extracted L4 crop" />
+              </div>
+            )}
+            {/* (4) DICOM metadata (two-column), attached under the L4 crop */}
+            <div className="dicom-meta">
+              <h4>DICOM metadata</h4>
+              {metaEntries.length > 0 && (
+                <dl>
+                  {metaEntries.map(([k, v]) => (
+                    <div className="meta-row" key={k}>
+                      <dt>{META_LABELS[k] ?? k}</dt>
+                      <dd>{String(v)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+            </div>
           </div>
-        )}
-
-        {/* (4) DICOM metadata (two-column) + (2)(3) Notes inside it */}
-        <div className="dicom-meta">
-          <h4>DICOM metadata</h4>
-          {metaEntries.length > 0 && (
-            <dl>
-              {metaEntries.map(([k, v]) => (
-                <div className="meta-row" key={k}>
-                  <dt>{META_LABELS[k] ?? k}</dt>
-                  <dd>{String(v)}</dd>
-                </div>
-              ))}
-            </dl>
+          {xaiDensity && (
+            <DensityBasis
+              densityUrl={`${xaiDensity}?v=${study.id}`}
+              densityLow={m?.density_low}
+              densityHigh={m?.density_high}
+              roiMean={m?.roi_mean_intensity}
+              bmdValue={m?.bmd_value}
+            />
           )}
-          <StudyNote
-            studyId={study.id}
-            initialNote={study.note}
-            initialUpdatedAt={study.note_updated_at}
-          />
         </div>
+
+        {/* Notes: full width below the row */}
+        <StudyNote
+          studyId={study.id}
+          initialNote={study.note}
+          initialUpdatedAt={study.note_updated_at}
+        />
       </div>
 
       <div className="result-pane">
         {m && (
           <>
-            <div className="bmd-headline">
+            {m.reliable === false && (
+              <div className="bmd-warning" role="alert">
+                <span className="bmd-warning-icon" aria-hidden="true">⚠</span>
+                <div>
+                  <b>Unreliable measurement — verify manually.</b>
+                  <p>
+                    {m.reliability_warning ??
+                      "The target vertebra may be cut off or misidentified."}
+                  </p>
+                </div>
+              </div>
+            )}
+            <div className={`bmd-headline${m.reliable === false ? " unreliable" : ""}`}>
               <span className="label">L4 bone density (BMD)</span>
               <span className="value">{m.bmd_value.toFixed(3)}</span>
               {m.t_score != null && (
@@ -129,7 +157,6 @@ export function XrayViewer({ studyId }: { studyId: string }) {
             </div>
             <XaiPanel
               factors={m.xai_factors}
-              densityUrl={xaiDensity ? `${xaiDensity}?v=${study.id}` : null}
               camUrl={xaiCam ? `${xaiCam}?v=${study.id}` : null}
             />
           </>

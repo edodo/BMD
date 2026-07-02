@@ -1,16 +1,12 @@
-// XAI 패널: BMD 값에 영향을 준 항목을 의사가 이해할 수 있게 표시.
-// 항목 값 아래에는 두 가지 시각적 근거(둘 다 L4로 크롭)를 함께 보여준다:
-//   1) densityUrl — L4 ROI를 실제 감쇠로 색칠 (BMD 숫자의 직접 근거)
-//   2) camUrl     — L4 크롭 Eigen-CAM (분할 모델이 주목한 영역)
+// XAI 패널: BMD 값에 영향을 준 항목(factors) + 모델 주목도(Eigen-CAM).
+// 밀도 근거 히트맵은 DensityBasis 컴포넌트로 분리되어 L4 크롭 옆에 배치된다.
 import type { XaiFactor } from "@/lib/types";
 
 export function XaiPanel({
   factors,
-  densityUrl,
   camUrl,
 }: {
   factors: XaiFactor[];
-  densityUrl?: string | null;
   camUrl?: string | null;
 }) {
   const sorted = [...factors].sort(
@@ -46,22 +42,6 @@ export function XaiPanel({
           );
         })}
       </ul>
-
-      {densityUrl && (
-        <div className="xai-heatmap">
-          <h5>Density basis — L4 ROI attenuation</h5>
-          <img src={densityUrl} alt="L4 ROI density heatmap (actual attenuation)" />
-          <div className="xai-scale">
-            <span className="muted">Low</span>
-            <span className="bargrad" aria-hidden="true" />
-            <span className="muted">High density</span>
-          </div>
-          <p className="desc">
-            Per-pixel attenuation inside the L4 ROI — this is exactly what the
-            BMD value is computed from. Warm = denser bone (raises BMD).
-          </p>
-        </div>
-      )}
 
       {camUrl && (
         <div className="xai-heatmap">

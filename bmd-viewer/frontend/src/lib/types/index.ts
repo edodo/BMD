@@ -53,6 +53,15 @@ export interface BmdMeasurement {
   l4_crop_path: string | null;
   xai_overlay_path: string | null;
   xai_l4_cam_path: string | null;
+  // 밀도 히트맵 컬러 스케일 (이미지별로 다름):
+  // density_low = 파란색(저밀도) 끝, density_high = 빨간색(고밀도) 끝,
+  // roi_mean_intensity = 이 L4 평균 감쇠값 (스케일 위 위치)
+  density_low: number | null;
+  density_high: number | null;
+  roi_mean_intensity: number | null;
+  // 측정 신뢰도: 대상 척추가 이미지 경계에 잘렸는지 등. false면 경고 표시.
+  reliable: boolean;
+  reliability_warning: string | null;
   model_version: string | null;
   computed_at: string;
   segments: VertebraSegment[];

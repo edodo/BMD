@@ -48,6 +48,17 @@ class InferenceResult:
     l4_crop_path: str | None = None      # 추출된 L4 크롭 이미지
     xai_overlay_path: str | None = None  # 밀도 근거 히트맵 (L4 ROI 실제 감쇠)
     xai_l4_cam_path: str | None = None   # L4 크롭 Eigen-CAM 어트리뷰션
+    # 밀도 히트맵 컬러 스케일 (이미지별로 다름):
+    #   density_low  = 파란색(저밀도) 끝 감쇠값
+    #   density_high = 빨간색(고밀도) 끝 감쇠값
+    #   roi_mean_attenuation = 이 L4 ROI 평균 감쇠값 (스케일 위 위치 = BMD)
+    density_low: float | None = None
+    density_high: float | None = None
+    roi_mean_attenuation: float | None = None
+    # 측정 신뢰도: 대상 척추가 이미지 경계에 잘렸거나(truncated) 부적합 영상이면
+    # reliable=False, reliability_warning에 사유. 값은 유지하되 프론트에서 경고.
+    reliable: bool = True
+    reliability_warning: str | None = None
     segments: list[SegmentResult] = field(default_factory=list)
     xai_factors: list[XaiResult] = field(default_factory=list)
     acquired_at: str | None = None       # DICOM 메타에서 추출

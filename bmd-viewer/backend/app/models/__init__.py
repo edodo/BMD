@@ -184,6 +184,21 @@ class BmdMeasurement(Base):
         String(512), nullable=True
     )
 
+    # 밀도 히트맵 컬러 스케일 (이미지별로 다름). 프론트에서 파랑/빨강 끝
+    # 값과 L4 평균 위치를 눈금으로 표시하는 데 사용.
+    density_low: Mapped[float | None] = mapped_column(Float, nullable=True)
+    density_high: Mapped[float | None] = mapped_column(Float, nullable=True)
+    roi_mean_intensity: Mapped[float | None] = mapped_column(
+        Float, nullable=True
+    )
+
+    # 측정 신뢰도. 대상 척추가 이미지 경계에 잘렸거나 부적합 영상이면 False,
+    # 사유는 reliability_warning. 값은 유지하되 프론트에서 경고 표시.
+    reliable: Mapped[bool] = mapped_column(default=True)
+    reliability_warning: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
+
     model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     computed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

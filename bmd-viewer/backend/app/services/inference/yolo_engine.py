@@ -33,10 +33,12 @@ logger = logging.getLogger(__name__)
 CLASS_NAMES = ["L1", "L2", "L3", "L4", "L5"]
 L4_CLASS_ID = CLASS_NAMES.index("L4")  # 3
 
-# 노트북 하이퍼파라미터
+# 노트북 하이퍼파라미터 (L4_AP_segmentation_v9.ipynb — YOLO26m-seg, AP+LA)
 INVERT = True          # MONOCHROME1을 학습 톤에 맞춰 뼈를 밝게
 CONF = 0.25            # detection confidence threshold
-ROI_SHRINK = 0.7       # 1.0=whole vertebral body, 0.7=central cancellous ROI
+IMGSZ = 640            # 학습/ONNX export 입력 크기 (dynamic=False로 고정)
+# 해면골 ROI 크기(ROI_SHRINK)는 settings.bmd_roi_shrink로 이동 — 런타임 튜닝 가능.
+# 1.0=L4 전체, 0.85=L4에 딱 맞음(피질골 edge 회피, 모델 소스와 동일), 0.7=좁은 중심.
 
 # BMD is normalized per-image (relative to this image's own soft-tissue
 # baseline and bone peak), so no fixed reference constant is used.
@@ -98,10 +100,12 @@ class _YoloEigenCAM:
 class YoloBmdEngine(BmdInferenceEngine):
     """YOLOv8-seg 기반 L1~L5 분할 + L4 proxy BMD 산출 엔진."""
 
-    MODEL_VERSION = "yolov8-seg-l1l5-1.0"
+    MODEL_VERSION = "yolo26m-seg-l1l5-ap-la-2.0"
 
     def __init__(self, weights_path: Path | None = None) -> None:
-        self._weights = weights_path or (settings.ml_model_dir / "l1_l5_seg.pt")
+        self._weights = weights_path or (
+            settings.ml_model_dir / settings.ml_model_file
+        )
         self._model = None  # lazy load
         self._cam = None    # lazy Eigen-CAM hooker
 
@@ -118,7 +122,15 @@ class YoloBmdEngine(BmdInferenceEngine):
         return self._model
 
     def _ensure_cam(self):
-        """Eigen-CAM 훅을 모델당 1회 등록 (실패 시 None)."""
+        """Eigen-CAM 훅을 모델당 1회 등록 (실패 시 None).
+
+        ONNX(onnxruntime) 백엔드에는 torch nn.Module 층이 없어 forward hook을
+        걸 수 없다. 이 경우 Eigen-CAM(모델 주목도 크롭)은 생략하고 밀도 근거
+        히트맵(xai_density.png)만 산출한다.
+        """
+        if self._weights.suffix.lower() == ".onnx":
+            self._cam = False  # ONNX: torch hook 불가 → CAM 생략
+            return None
         if self._cam is None:
             try:
                 self._cam = _YoloEigenCAM(self._ensure_model())
@@ -243,10 +255,7 @@ class YoloBmdEngine(BmdInferenceEngine):
         base = rgb.copy()
         m = mask > 0
         base[m] = (0.30 * base[m] + 0.70 * heat[m]).astype(np.uint8)
-        cnts, _ = cv2.findContours(
-            mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )
-        cv2.drawContours(base, cnts, -1, (0, 255, 0), 1)
+        # ROI 외곽선(초록 테두리)은 표시하지 않는다 — 히트맵만 깔끔하게.
         cx1, cy1, cx2, cy2 = box
         return cls._upscale(base[cy1:cy2, cx1:cx2])
 
@@ -292,6 +301,46 @@ class YoloBmdEngine(BmdInferenceEngine):
         return None, f"Only {len(boxes_xyxy)} vertebrae detected"
 
     @staticmethod
+    def _reliability(
+        l4_box, H: int, W: int, n_vertebrae: int, margin_frac: float = 0.02
+    ) -> tuple[bool, str | None]:
+        """측정 신뢰도 점검. 값은 유지하되 부적합 신호를 경고로 반환한다.
+
+        주 신호는 '경계 잘림(truncation)': L4 bbox가 이미지 상/하/좌/우 경계에
+        여백(margin_frac) 이내로 닿으면, 실제 L4가 프레임 밖으로 잘려나간
+        (예: 골반/고관절 영상) 것이므로 ROI가 불완전 → BMD 신뢰 불가.
+        보조로 검출 척추 수가 너무 적으면 요추 영상이 아닐 가능성을 덧붙인다.
+        """
+        x1, y1, x2, y2 = l4_box
+        m = max(2.0, margin_frac * min(H, W))
+        sides = []
+        if y1 <= m:
+            sides.append("top")
+        if y2 >= H - m:
+            sides.append("bottom")
+        if x1 <= m:
+            sides.append("left")
+        if x2 >= W - m:
+            sides.append("right")
+
+        reasons = []
+        if sides:
+            reasons.append(
+                "L4 vertebra touches the image edge ("
+                + ", ".join(sides)
+                + ") — likely cut off (e.g. pelvis/hip view); "
+                "the ROI is partial so BMD is unreliable."
+            )
+        if n_vertebrae < 3:
+            reasons.append(
+                f"Only {n_vertebrae} vertebra(e) detected — may not be a "
+                "lumbar-spine view suitable for L4 BMD."
+            )
+        if reasons:
+            return False, " ".join(reasons)
+        return True, None
+
+    @staticmethod
     def _bbox_norm(xyxy, W, H):
         x1, y1, x2, y2 = xyxy
         return (
@@ -302,29 +351,76 @@ class YoloBmdEngine(BmdInferenceEngine):
         )
 
     @staticmethod
-    def _bmd_anchors(dens: np.ndarray, roi_vals: np.ndarray) -> tuple[float, float]:
-        """Per-image low/high intensity anchors used to normalize BMD.
+    def _valid_tissue_mask(dens: np.ndarray) -> np.ndarray:
+        """유효 조직(연부조직+뼈) 마스크. 배경(공기)과 금속 인공물을 제외한다.
 
-          - low anchor  = 25th percentile of the whole image (soft tissue)
-          - high anchor = 99th percentile of the whole image (densest bone)
-        Degenerate distributions (synthetic/binary) fall back to the ROI's
-        own 5–95 percentile spread. Shared by the BMD score AND the faithful
-        density heatmap so both speak the same scale.
+        고관절 수술 환자 영상 대응:
+          - 배경 : Otsu 임계 이하 = 거의 균일한 저밀도 영역(공기/촬영 여백).
+                   전체 percentile 기준선을 아래로 끌어내려 BMD를 부풀리므로 제외.
+          - 금속 : 유효 조직 p95(치밀골 근방) × metal_ratio 초과 = 초고감쇠 인공물
+                   (인공관절/척추 고정재). 상단 percentile을 끌어올리므로 제외.
+        금속이 없는 영상에서는 max가 임계를 넘지 않아 아무 것도 제외되지 않는다.
         """
-        low = float(np.percentile(dens, 25))
-        high = float(np.percentile(dens, 99))
+        valid = np.ones(dens.shape, dtype=bool)
+        if settings.bmd_exclude_background:
+            u8 = cv2.normalize(dens, None, 0, 255, cv2.NORM_MINMAX).astype(
+                np.uint8
+            )
+            thr, _ = cv2.threshold(
+                u8, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+            )
+            valid &= u8 >= thr  # 배경/공기 제외 → 몸통(전경)만
+        body = dens[valid]
+        if body.size:
+            # 금속에 덜 휘둘리는 뼈 기준값(p95)의 배수로 금속 임계 설정
+            bone_ref = float(np.percentile(body, 95))
+            metal_thr = settings.bmd_metal_ratio * bone_ref
+            valid &= dens < metal_thr  # 금속/인공물 제외
+        return valid
+
+    @staticmethod
+    def _density_scale(
+        dens: np.ndarray,
+        valid: np.ndarray,
+        l4_box: tuple[int, int, int, int],
+        bone_union: np.ndarray,
+        roi_vals: np.ndarray,
+    ) -> tuple[float, float]:
+        """BMD 정규화용 low/high 기준값 (유효 조직 기반).
+
+          - low  = L4 인접 '국소 연부조직' 중앙값 (뼈 마스크 제외).
+                   측정 부위 바로 옆 조직을 기준 삼으므로 촬영 시야/배경에 면역.
+          - high = 유효 조직의 99 percentile (치밀골). 금속은 이미 제외됨.
+        국소 연부조직 픽셀이 부족하면 유효 조직 전체 25 percentile로 폴백,
+        그래도 축퇴(degenerate)면 ROI 자체 5–95 percentile을 쓴다.
+        BMD 점수와 밀도 히트맵이 동일 스케일을 공유하도록 한 곳에서 산출.
+        """
+        cx1, cy1, cx2, cy2 = l4_box
+        window = np.zeros(dens.shape, dtype=bool)
+        window[cy1:cy2, cx1:cx2] = True
+        soft = valid & window & (bone_union == 0)
+        soft_vals = dens[soft]
+        if soft_vals.size >= 50:
+            low = float(np.median(soft_vals))
+        else:
+            body = dens[valid]
+            low = float(np.percentile(body, 25)) if body.size else float(
+                np.percentile(dens, 25)
+            )
+
+        body = dens[valid]
+        high = float(np.percentile(body, 99)) if body.size else float(
+            np.percentile(dens, 99)
+        )
         if high - low <= 1e-6:
             roi_lo = float(np.percentile(roi_vals, 5))
             roi_hi = float(np.percentile(roi_vals, 95))
             return roi_lo, roi_lo + max(roi_hi - roi_lo, 1e-6)
         return low, high
 
-    @classmethod
-    def _bmd_score(
-        cls, mean_dens: float, dens: np.ndarray, roi_vals: np.ndarray
-    ) -> float:
-        """Map L4 ROI mean intensity into [low, high] → 0..1 proxy BMD score."""
-        low, high = cls._bmd_anchors(dens, roi_vals)
+    @staticmethod
+    def _bmd_score(mean_dens: float, low: float, high: float) -> float:
+        """L4 ROI 평균 감쇠를 [low, high] → 0..1 proxy BMD 점수로 사상."""
         score = (mean_dens - low) / (high - low)
         return round(float(np.clip(score, 0.0, 1.0)), 3)
 
@@ -349,7 +445,7 @@ class YoloBmdEngine(BmdInferenceEngine):
         if cam_hooker is not None:
             cam_hooker.clear()
 
-        r = model.predict(rgb, conf=CONF, verbose=False)[0]
+        r = model.predict(rgb, conf=CONF, imgsz=IMGSZ, verbose=False)[0]
         if r.masks is None or len(r.boxes) == 0:
             raise RuntimeError("No vertebrae detected (check image quality/exposure)")
 
@@ -361,13 +457,25 @@ class YoloBmdEngine(BmdInferenceEngine):
         if l4_i is None:
             raise RuntimeError(f"Could not identify L4: {status}")
 
+        # 측정 신뢰도: 대상 척추가 이미지 경계에 잘렸는지 등 (값은 유지, 경고만).
+        reliable, reliability_warning = self._reliability(
+            boxes[l4_i], H, W, len(boxes)
+        )
+        if not reliable:
+            logger.warning("측정 신뢰도 낮음: %s", reliability_warning)
+
+        # 유효 조직 마스크(배경·금속 제외)와 전체 뼈 영역(연부조직 기준선 산출용).
+        valid = self._valid_tissue_mask(dens)
+        bone_union = np.zeros((H, W), np.uint8)
+
         # 검출된 모든 척추를 분할 결과로 기록
         segments: list[SegmentResult] = []
         for i in range(len(boxes)):
             cid = classes[i]
             label = CLASS_NAMES[cid] if 0 <= cid < len(CLASS_NAMES) else str(cid)
             m_full = self._poly_to_mask(r.masks.xy[i], H, W, shrink=1.0)
-            seg_vals = dens[m_full > 0]
+            bone_union |= m_full
+            seg_vals = dens[(m_full > 0) & valid]
             segments.append(
                 SegmentResult(
                     label=label,
@@ -381,9 +489,14 @@ class YoloBmdEngine(BmdInferenceEngine):
                 )
             )
 
-        # L4 ROI (중앙 해면골) 골밀도 통계
-        mask = self._poly_to_mask(r.masks.xy[l4_i], H, W, shrink=ROI_SHRINK)
-        vals = dens[mask > 0]
+        # L4 ROI (중앙 해면골) 골밀도 통계. 유효 조직만 사용(ROI 내 금속 픽셀 배제).
+        mask = self._poly_to_mask(
+            r.masks.xy[l4_i], H, W, shrink=settings.bmd_roi_shrink
+        )
+        vals = dens[(mask > 0) & valid]
+        if vals.size == 0:
+            # 전부 금속/배경으로 걸러진 극단 상황 → 원 ROI로 폴백
+            vals = dens[mask > 0]
         if vals.size == 0:
             raise RuntimeError("L4 mask is empty")
 
@@ -392,8 +505,14 @@ class YoloBmdEngine(BmdInferenceEngine):
         std_d = float(vals.std())
         p10 = float(np.percentile(vals, 10))
         p90 = float(np.percentile(vals, 90))
-        low_anchor, high_anchor = self._bmd_anchors(dens, vals)
-        bmd_value = self._bmd_score(mean_d, dens, vals)
+        # low = L4 인접 국소 연부조직, high = 유효 조직 99pct (배경·금속 제외).
+        # 뼈 경계가 연부조직에 새지 않도록 뼈 영역을 살짝 팽창시켜 사용.
+        bone_dil = cv2.dilate(bone_union, np.ones((7, 7), np.uint8), 1)
+        low_anchor, high_anchor = self._density_scale(
+            dens, valid, self._crop_box(H, W, boxes[l4_i], pad=0.6), bone_dil,
+            vals,
+        )
+        bmd_value = self._bmd_score(mean_d, low_anchor, high_anchor)
 
         # Overlay: draw the actual segmentation polygon outline for every
         # detected vertebra. L4 (target) in red + light tint, others in blue.
@@ -547,6 +666,12 @@ class YoloBmdEngine(BmdInferenceEngine):
             l4_crop_path=l4_crop_path,
             xai_overlay_path=xai_overlay_path,
             xai_l4_cam_path=xai_l4_cam_path,
+            # 밀도 히트맵 스케일 (파랑 끝 / 빨강 끝 / L4 평균)
+            density_low=round(low_anchor, 1),
+            density_high=round(high_anchor, 1),
+            roi_mean_attenuation=round(mean_d, 1),
+            reliable=reliable,
+            reliability_warning=reliability_warning,
             segments=segments,
             xai_factors=xai,
             acquired_at=acquired_at,

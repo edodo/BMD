@@ -108,6 +108,13 @@ class BmdMeasurementOut(ORMBase):
     l4_crop_path: str | None = None
     xai_overlay_path: str | None = None
     xai_l4_cam_path: str | None = None
+    # 밀도 히트맵 컬러 스케일 (파랑 끝 / 빨강 끝 / L4 평균 감쇠값)
+    density_low: float | None = None
+    density_high: float | None = None
+    roi_mean_intensity: float | None = None
+    # 측정 신뢰도 (경계 잘림 등). 값은 유지하되 경고 표시용.
+    reliable: bool = True
+    reliability_warning: str | None = None
     model_version: str | None
     computed_at: datetime
     segments: list[VertebraSegmentOut] = []
