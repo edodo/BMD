@@ -68,6 +68,8 @@ async def process_study(study_id: str) -> None:
                 exposure_corrected=result.exposure_corrected,
                 gradcam_path=result.gradcam_path,
                 l4_crop_path=result.l4_crop_path,
+                xai_overlay_path=result.xai_overlay_path,
+                xai_l4_cam_path=result.xai_l4_cam_path,
                 model_version=result.model_version,
             )
             measurement.segments = [

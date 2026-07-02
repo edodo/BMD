@@ -58,3 +58,31 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_apply_lightweight_migrations)
+
+
+def _apply_lightweight_migrations(conn) -> None:
+    """create_all이 추가하지 못하는 신규 컬럼을 보충한다 (개발/SQLite용).
+
+    SQLite의 `CREATE TABLE`은 이미 존재하는 테이블에 컬럼을 더하지 않으므로,
+    기존 DB를 삭제하지 않고도 신규 컬럼을 사용할 수 있게 idempotent하게 처리.
+    운영 환경에서는 Alembic 마이그레이션으로 대체할 것.
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(conn)
+    try:
+        existing = {c["name"] for c in inspector.get_columns("bmd_measurements")}
+    except Exception:  # noqa: BLE001 — 테이블이 아직 없으면 create_all이 처리
+        return
+
+    # (컬럼명, DDL 타입) — 누락 시에만 ADD COLUMN
+    additions = {
+        "xai_overlay_path": "VARCHAR(512)",
+        "xai_l4_cam_path": "VARCHAR(512)",
+    }
+    for col, ddl in additions.items():
+        if col not in existing:
+            conn.execute(
+                text(f"ALTER TABLE bmd_measurements ADD COLUMN {col} {ddl}")
+            )

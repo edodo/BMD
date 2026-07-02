@@ -77,6 +77,15 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
 .xai-panel .fill.pos { background: var(--pos); height: 100%; border-radius: 4px; }
 .xai-panel .fill.neg { background: var(--neg); height: 100%; border-radius: 4px; }
 .xai-panel .desc { color: var(--muted); font-size: 11px; margin: 3px 0 0; }
+.xai-heatmap { margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid var(--border); }
+.xai-heatmap h5 { margin: 0 0 8px; font-size: 13px; }
+.xai-heatmap img { width: 100%; border-radius: 8px;
+  border: 1px solid var(--border); display: block; }
+.xai-heatmap .xai-scale { display: flex; align-items: center; gap: 6px;
+  margin-top: 6px; font-size: 10px; }
+.xai-heatmap .bargrad { flex: 1; height: 8px; border-radius: 4px;
+  background: linear-gradient(to right, #0000ff, #00ffff, #00ff00, #ffff00, #ff0000); }
 .trend { margin-top: 20px; padding: 14px; background: var(--panel);
   border: 1px solid var(--border); border-radius: 10px; }
 .trend-header { display: flex; justify-content: space-between; align-items: center; }

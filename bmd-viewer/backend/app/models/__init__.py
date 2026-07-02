@@ -175,6 +175,14 @@ class BmdMeasurement(Base):
     gradcam_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # 추출된 L4 척추체 크롭 이미지 경로 (크게 보여주기용)
     l4_crop_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # 밀도 근거 히트맵 (L4 ROI 실제 감쇠 색칠) 이미지 경로
+    xai_overlay_path: Mapped[str | None] = mapped_column(
+        String(512), nullable=True
+    )
+    # L4 크롭 Eigen-CAM 어트리뷰션 이미지 경로
+    xai_l4_cam_path: Mapped[str | None] = mapped_column(
+        String(512), nullable=True
+    )
 
     model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     computed_at: Mapped[datetime] = mapped_column(

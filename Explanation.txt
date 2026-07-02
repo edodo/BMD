@@ -1,0 +1,91 @@
+bmd_mean	vals.mean()	평균 골밀도. 뼈 영역 전체 픽셀의 평균 밝기값입니다.
+bmd_median	np.median(vals)	골밀도 중앙값. 극단적으로 밝거나 어두운 노이즈 픽셀의 영향을 덜 받는 안정적인 대표값입니다.
+bmd_std	vals.std()	골밀도 표준편차. 뼈 내부가 얼마나 균일한지(Uniformity) 혹은 불균일한지(Heterogeneity)를 나타냅니다.
+bmd_p10	np.percentile(vals, 10)	하위 10% 스코어. 뼈에서 상대적으로 밀도가 가장 낮고 골다공증 위험이 있을 수 있는 어두운 영역의 대변자입니다.
+bmd_p90	np.percentile(vals, 90)	상위 10% 스코어. 피질골(Cortical bone)처럼 단단하고 뼈가 잘 발달한 밝은 영역의 대변자입니다.
+
+
+지표명의미뼈 영상(X-ray) 데이터에서의 해석
+
+contrast(대비)
+이웃 픽셀 간의밝기 차이 강도
+이 값이 높을수록 뼈 내부 명암 변화가 격렬하고 선들이 뚜렷하다는 뜻입니다. 질감이 거칠고 거친 상태를 나타냅니다.
+
+correlation(상관관계)
+지정된 픽셀 쌍들의선형적 유사성
+공간적으로 패턴이 얼마나 일정한 방향이나 규칙성을 갖고 배치되어 있는지를 보여줍니다.
+
+energy(에너지)
+픽셀 쌍 분포의균일함 (Uniformity)
+특정 밝기 쌍이 반복적으로 많이 나타나면 높아집니다. 이미지의 질감이 단순하고 평평할수록 높은 값을 가집니다.
+
+homogeneity(동질성)
+로컬 영역의조밀함 (Closeness)
+픽셀 구조가 급격하게 변하지 않고 전반적으로 부드럽게 이어지는지 나타냅니다. 높을수록 부드러운 질감입니다.
+
+
+[1]
+"To give you a quick update, our main subject has shifted slightly. Instead of spinal bone density, we are now focusing on measuring spinal bone architecture after hip surgery using X-ray data.
+
+The project is split into two phases:
+
+The AI Model: First, we segment/extract the spine, and then we analyze the architecture of a specific target. We chose L4 because it offers the clearest view with the least interference from other bones or muscles.
+
+The Infrastructure & Software: This covers the backend architecture, web servers, database, cloud setup, and the frontend UI.
+
+I’ve put together a prototype version of this entire system. It’s a work in progress, but the spine extraction part is almost done and constantly improving.
+
+Today, I’d like to explain how the spine extraction and architecture analysis work, and then show you a live demo of this sample software."
+
+I'll present quickly.
+[2]
+I'll show you the model source code.
+
+[3]
+This is the definition of web application requirements.
+I created a web application based on this definition.
+I'll show you the application.
+This is a simplified version created to help you understand.
+The proper version will be created later.
+
+[4]
+You can create an account and log in.
+And this is the patients list.
+you can create patients.
+This is and uploaded X-ray record.
+This chart shows changes in bone structure.
+
+If you select X-ray record, you can view the original x-ray image and the displayed L1 through L5 vertebrae.
+And The L4 vertebrae has been extracted..
+This is the X-ray metdata
+This is the notes area.
+Here is L4 bone structure value 
+Below the values are explainable AI values.
+But it will be changed. I'm currently developing this part.
+
+This value evaluates the brightness of the L4 region by comparing the darkest and brightest regions based on the pixel brightness of the DICOM file.
+Research is currently underway to improve this calculation formula.
+
+
+------
+GLCM이란? (Gray-Level Co-occurrence Matrix)
+Density tells us how bright the bone is. Texture tells us the pattern of the bone inside. 
+I use GLCM — it looks at neighboring pixels and measures how rough or smooth, how regular the bone pattern is. 
+Dense, healthy bone looks smooth and regular; 
+weak, porous bone looks rough and irregular. 
+So texture adds information that brightness alone misses.
+--------------------------
+[histogram] 일반이미지와 DICOM 이미지의 밝기 분포 차이 비교
+bins=64는 0.0부터 1.0까지의 밝기 영역을 64개의 구간으로 쪼개서 빈도수를 세겠다는 뜻입니다.
+가로축은 '정규화된 밝기 값', 세로축은 '픽셀 수(Count)'로 레이블을 지정합니다.
+
+
+입력: 사진을 인공지능(YOLO)에 집어넣음
+
+탐지: 인공지능이 뼈들의 위치와 테두리(Polygon)를 쭉 찾아냄
+
+선택: 규칙에 따라 그중에서 L4(요추 4번) 뼈가 몇 번째 놈인지 콕 집어냄 (pick_l4_index)
+
+변환: 집어낸 뼈의 테두리 좌표를 가지고 실제 지도 형태의 흑백 마스크 이미지로 그려냄 (poly_to_mask)
+
+출력: 최종 마스크 이미지와 결과를 반환 완료

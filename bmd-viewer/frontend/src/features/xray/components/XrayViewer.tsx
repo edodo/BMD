@@ -47,6 +47,8 @@ export function XrayViewer({ studyId }: { studyId: string }) {
   const preview = dp.assetUrl(study.preview_path);
   const imageSrc = overlay ?? preview;
   const l4Crop = dp.assetUrl(m?.l4_crop_path ?? null);
+  const xaiDensity = dp.assetUrl(m?.xai_overlay_path ?? null);
+  const xaiCam = dp.assetUrl(m?.xai_l4_cam_path ?? null);
 
   // Parse DICOM metadata JSON (stored as string)
   let meta: Record<string, unknown> = {};
@@ -125,7 +127,11 @@ export function XrayViewer({ studyId }: { studyId: string }) {
               <span>Model {m.model_version}</span>
               {m.exposure_corrected && <span>Exposure corrected</span>}
             </div>
-            <XaiPanel factors={m.xai_factors} />
+            <XaiPanel
+              factors={m.xai_factors}
+              densityUrl={xaiDensity ? `${xaiDensity}?v=${study.id}` : null}
+              camUrl={xaiCam ? `${xaiCam}?v=${study.id}` : null}
+            />
           </>
         )}
       </div>

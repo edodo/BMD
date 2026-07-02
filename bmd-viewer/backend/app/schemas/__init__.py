@@ -106,6 +106,8 @@ class BmdMeasurementOut(ORMBase):
     exposure_corrected: bool
     gradcam_path: str | None
     l4_crop_path: str | None = None
+    xai_overlay_path: str | None = None
+    xai_l4_cam_path: str | None = None
     model_version: str | None
     computed_at: datetime
     segments: list[VertebraSegmentOut] = []

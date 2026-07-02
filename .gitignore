@@ -1,0 +1,10 @@
+model/BUU-LSPINE-2000/
+model/dataset-dcm
+model/l4_v2_output
+model/l4_v3_output
+model/l4_v4_output
+model/l4_v5_output
+model/l4_v6_output
+model/l4_v7_output
+model/yolo_ap_la_seg
+model/yolo_ap_seg

@@ -51,6 +51,8 @@ export interface BmdMeasurement {
   exposure_corrected: boolean;
   gradcam_path: string | null;
   l4_crop_path: string | null;
+  xai_overlay_path: string | null;
+  xai_l4_cam_path: string | null;
   model_version: string | null;
   computed_at: string;
   segments: VertebraSegment[];

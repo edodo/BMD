@@ -1,0 +1,87 @@
+내 소스 "L4_AP_segmentation.ipynb" 는 골밀도 측정 프로젝트야.
+정확한 제목은 "The measurement of spinal bone architecture following hip surgery using X-ray datasets" 이야.
+2D X-ray 데이터 셋을 입력받아
+L1~L5 척추를 추출하고
+L4 척추의 골밀도, 골조직을 측정하는 프로젝트야.
+1. 일단 골밀도와 골조직에 대해 정의하고 계산방법 정의해줘
+2. 첨부된 파일 구조를 최대한 활용해주고 모델을 정의하고 부족한게 있다면 개선해줘.
+3. 아래와 같은 프로세스로 모든 결과는 주피터 노트북 코드에 visualization 해줘
+데이터로딩
+데이터 클렌징
+Train, validation, Test Split
+Model Building
+Model Training
+Evaluation
+make pre trained model
+4. 결과에 대해 XAI 리포트를 비주얼하게 제공해줘
+5. 데이터셋 경로
+Train 데이터셋경로 : ./BUU-LSPINE-2000
+Validation 데이터셋경로 : ./BUU-LSPINE-2000 (Train 데이터셋 20% 사용)
+Test 데이터셋경로 : ./dataset-dcm/test/gather
+6. 모든 소스, 결과는 영어로 작성해줘.
+
+------
+# Role & Context
+You are an expert Medical AI Engineer and Data Scientist specializing in computer vision, medical imaging analysis (X-rays, DICOM), and Explainable AI (XAI).
+
+We are developing a deep learning project titled:
+**"The measurement of spinal bone architecture following hip surgery using X-ray datasets"**
+
+The overall goal is to take 2D X-ray datasets as input, segment/extract the L1~L5 vertebrae, and specifically measure the Bone Mineral Density (BMD) and Bone Microarchitecture of the **L4 vertebra**.
+
+You must generate a comprehensive, production-ready Jupyter Notebook script (`L4_AP_segmentation_v2.ipynb`). 
+Please refer to this file L4_AP_segmentation.ipynb
+The entire notebook—including markdown text, code comments, and visualization labels—must be written strictly in **English**.
+
+---
+
+# Requirements & System Architecture
+
+## 1. Clinical Definitions & Mathematical Formulations (Markdown)
+Include a detailed introductory Markdown section explaining:
+- **Bone Mineral Density (BMD):** Area-based density approximation using normalized mean grayscale pixel intensities within the segmented L4 ROI.
+- **Bone Microarchitecture (Tissue Quality):** 2D texture extraction via Gray-Level Co-occurrence Matrix (GLCM), metrics including Contrast, Correlation, and Energy/ASM to evaluate trabecular bone complexity.
+
+## 2. End-to-End Pipeline & Visualized Code Structure
+Implement the following 7-step pipeline using PyTorch (or TensorFlow/Keras) and standard medical/vision libraries (`OpenCV`, `scikit-image`, `scikit-learn`, `matplotlib`, `seaborn`). **Every step must explicitly include visualization functions.**
+
+1. **Data Loading:**
+   - Configure data pipelines for the given paths:
+     - *Train Path:* `./BUU-LSPINE-2000`
+     - *Validation Path:* Split 20% randomly/stratified from `./BUU-LSPINE-2000`
+     - *Test Path:* `./dataset-dcm/test/gather` (Support handling DICOM or standard image sequences properly).
+   - *Visualization:* Plot a grid of sample raw X-ray images alongside their pixel intensity histograms.
+
+2. **Data Cleansing & Preprocessing:**
+   - Apply artifact removal, contrast enhancement (such as CLAHE - Contrast Limited Adaptive Histogram Equalization), resizing, and min-max normalization.
+   - *Visualization:* Display side-by-side comparisons of "Original Raw Image" vs "Preprocessed Image".
+
+3. **Train, Validation, Test Split:**
+   - Create dataset modules and PyTorch DataLoaders.
+   - *Visualization:* Provide a bar or pie chart illustrating the sample distribution among Train, Validation, and Test sets.
+
+4. **Model Building:**
+   - Define a robust multi-class or multi-mask segmentation network (e.g., U-Net or ResNet-UNet architecture) capable of identifying L1, L2, L3, L4, and L5 vertebrae as distinct classes or layers, ensuring the model focuses heavily on isolating the L4 region for downstream BMD/texture analysis.
+
+5. **Model Training:**
+   - Write a complete training loop with a hybrid loss function (e.g., Dice Loss + Binary Cross-Entropy Loss), Adam optimizer, and learning rate scheduler.
+   - *Visualization:* Generate a line chart showing Train vs. Validation Loss and Dice Coefficient over epochs updated dynamically or at the end of training.
+
+6. **Evaluation:**
+   - Evaluate model performance on the Test dataset using Dice Score, Intersection over Union (IoU), Precision, and Recall.
+   - Compute the actual BMD and GLCM features for the predicted L4 mask.
+   - *Visualization:* Plot predicted segmentation mask overlays on test images, a confusion matrix for pixel classification, and a Bland-Altman or correlation plot for target density measurements.
+
+7. **Make Pre-trained Model:**
+   - Save the best-performing model weights (`best_model.pth`) and write a clean, modular inference function that takes a new raw X-ray path and outputs both the segmentation plot and the computed L4 BMD/Microarchitecture metrics.
+
+## 3. Explainable AI (XAI) Report Section
+To validate clinical trust, implement an advanced visual XAI component:
+- Use feature attribution techniques applicable to segmentation models (such as Grad-CAM or Grad-CAM++ applied to the final bottleneck/convolutional layer).
+- *Visualization:* Generate and display a blending overlay of the Grad-CAM heatmap on the input X-ray image, focusing on the L4 region to clearly show which structural patterns, bone edges, or density variations influenced the model's prediction.
+
+---
+
+# Output Constraints
+- Do not use placeholders like `# TODO` or `pass` inside critical blocks; provide fully working Python code.
+- Ensure all plots use clear English legends, titles, and axes labels suitable for a formal medical AI report.

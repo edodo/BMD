@@ -46,6 +46,8 @@ class InferenceResult:
     preview_path: str | None = None      # DICOM → PNG 변환 결과
     gradcam_path: str | None = None      # 설명성 오버레이
     l4_crop_path: str | None = None      # 추출된 L4 크롭 이미지
+    xai_overlay_path: str | None = None  # 밀도 근거 히트맵 (L4 ROI 실제 감쇠)
+    xai_l4_cam_path: str | None = None   # L4 크롭 Eigen-CAM 어트리뷰션
     segments: list[SegmentResult] = field(default_factory=list)
     xai_factors: list[XaiResult] = field(default_factory=list)
     acquired_at: str | None = None       # DICOM 메타에서 추출
