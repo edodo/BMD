@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     # 축소해 중앙 해면골만 잡는다. 1.0=L4 전체(피질골·종판 포함),
     # 0.7=좁은 중심, 0.85=L4에 딱 맞으면서 피질골 edge는 회피(모델 소스와 동일).
     bmd_roi_shrink: float = 0.85
+    # 종적 대조(compare)용 L4 밀도 격자 크기(N×N). 두 검사의 L4 ROI를 각자
+    # bbox 기준 N×N로 리샘플해 셀 단위로 비교(골손실 부위 검출)한다.
+    bmd_diff_grid_n: int = 12
 
     # --- CORS ---
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]

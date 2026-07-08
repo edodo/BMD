@@ -1,0 +1,23 @@
+v13 변경 (2번 묶음 구현)
+① 정규화 robust화 — cell 7 load_xray
+
+gray_lin을 raw min/max → 0.5/99.5 퍼센타일 윈도우(rgb와 동일)로 변경. 죽은/과포화 픽셀 하나가 BMD 지표를 흔들던 문제 해결. DICOM·JPG 둘 다 적용.
+② Trabecular ROI (피질 rim + endplate 제거) — cell 17 trabecular_roi
+
+cv2.erode로 피질 rim 제거 → 상하 endplate 밴드(18%) 절단 → 해면골 중심 ROI. 퇴화 시 shrink_mask로 안전 폴백. 기존 중심-축소 방식 대체.
+③ 절사평균 + 장비-강건 상대지표 — compute_bmd
+
+bmd_trimmed (10–90% 절사평균) = 메인 지표.
+bmd_rel = bmd_trimmed / 척추 옆 연부조직 기준값(soft_tissue_ref) — 노출/게인 편차를 상쇄하는 상대 지표(full_mask 전달 시). 좌우 paraspinal 밴드 중앙값으로 참조.
+일관성 (전 파이프라인 반영)
+shrink_mask → trabecular_roi로 모든 측정 경로 통일:
+
+Step 3 데모(18), XAI 2(31), Step 6 저장(26), Bland-Altman 평가(20), 추론 infer_l4(24) 전부 trabecular ROI + trimmed 지표 사용.
+Step 6 CSV / 추론 CSV에 bmd_trimmed, bmd_rel, soft_tissue_ref 컬럼 자동 추가.
+오버레이는 green=L4 마스크 / red=trabecular ROI로 표시돼 endplate 제거가 눈에 보입니다.
+검증: 33셀 전부 문법 통과, bmd_mean 참조 잔여 0, shrink_mask는 정의+폴백 2곳만 남음.
+
+의도적으로 뺀 것
+CLAHE: 국소 대비 평활화라 절대 강도 BMD 지표를 왜곡합니다(텍스처엔 좋지만 intensity엔 해로움). 텍스처 확장(의견 C, entropy/LBP/fractal)과 함께 나중에 별도 이미지로 다루는 게 맞아 제외했습니다.
+남은 선결 과제 (다시 강조)
+이 개선들이 실제로 좋아졌는지는 DXA T-score / 연속 BMD 정답이 있어야 AUC·상관으로 검증됩니다. bmd_rel·bmd_trimmed 컬럼이 CSV에 쌓이니, 라벨이 생기면 바로 상관분석·ROC를 붙일 수 있습니다.

@@ -62,6 +62,8 @@ export interface BmdMeasurement {
   // 측정 신뢰도: 대상 척추가 이미지 경계에 잘렸는지 등. false면 경고 표시.
   reliable: boolean;
   reliability_warning: string | null;
+  // 종적 대조용 L4 밀도 격자 (N×N, 0..1/null). post−pre로 골손실 부위 검출.
+  l4_density_grid: (number | null)[][] | null;
   model_version: string | null;
   computed_at: string;
   segments: VertebraSegment[];
@@ -88,6 +90,7 @@ export interface XrayStudyDetail {
   note: string | null;
   note_updated_at: string | null;
   preview_path: string | null;
+  overlay_path: string | null; // 부분 실패 시 검출 오버레이
   acquired_at: string | null;
   modality: string | null;
   status: StudyStatus;

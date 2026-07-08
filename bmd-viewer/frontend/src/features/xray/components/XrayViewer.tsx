@@ -36,9 +36,52 @@ export function XrayViewer({ studyId }: { studyId: string }) {
     return <div className="viewer loading">Analyzing… (auto-refresh)</div>;
   }
   if (study.status === "failed") {
+    // 실패해도 원본 + 추출한 척추까지 보여주고, L4 분석 영역만 비워 실패 표시.
+    const failOverlay = dp.assetUrl(study.overlay_path ?? null);
+    const failPreview = dp.assetUrl(study.preview_path ?? null);
+    const failImg = failOverlay ?? failPreview;
     return (
-      <div className="viewer error">
-        Analysis failed: {study.error_message ?? "unknown cause"}
+      <div className="viewer">
+        <div className="image-pane">
+          <div className="image-filename" title={study.original_filename ?? ""}>
+            {study.original_filename ?? "(no filename)"}
+          </div>
+          <div className="image-stack">
+            {failImg ? (
+              <img
+                key={study.id}
+                src={`${failImg}?v=${study.id}`}
+                alt="X-ray (original / detected vertebrae)"
+              />
+            ) : (
+              <div className="placeholder">No preview available</div>
+            )}
+          </div>
+          {failOverlay && (
+            <p className="muted" style={{ marginTop: 8 }}>
+              Original with detected vertebrae. L4 analysis could not be
+              completed.
+            </p>
+          )}
+        </div>
+        <div className="result-pane">
+          <div className="bmd-warning" role="alert">
+            <span className="bmd-warning-icon" aria-hidden="true">
+              ⚠
+            </span>
+            <div>
+              <b>L4 analysis failed</b>
+              <p>{study.error_message ?? "unknown cause"}</p>
+            </div>
+          </div>
+          <div className="fail-placeholder">
+            <span className="label">L4 bone density (BMD)</span>
+            <span className="value">—</span>
+            <p className="muted">
+              BMD, density heatmap, and XAI are unavailable for this study.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }

@@ -18,7 +18,7 @@ from app.models import (
     XaiFactor,
     XrayStudy,
 )
-from app.services.inference.engine import get_engine
+from app.services.inference.engine import PartialInferenceError, get_engine
 
 
 async def process_study(study_id: str) -> None:
@@ -75,6 +75,7 @@ async def process_study(study_id: str) -> None:
                 roi_mean_intensity=result.roi_mean_attenuation,
                 reliable=result.reliable,
                 reliability_warning=result.reliability_warning,
+                l4_density_grid=result.l4_density_grid,
                 model_version=result.model_version,
             )
             measurement.segments = [
@@ -101,6 +102,16 @@ async def process_study(study_id: str) -> None:
             ]
             db.add(measurement)
             study.status = StudyStatus.COMPLETED
+            await db.commit()
+
+        except PartialInferenceError as exc:
+            # L4 측정은 실패했지만 원본/추출 오버레이는 살려서 화면에 보여준다.
+            study.status = StudyStatus.FAILED
+            study.error_message = str(exc)
+            if exc.preview_path:
+                study.preview_path = exc.preview_path
+            if exc.overlay_path:
+                study.overlay_path = exc.overlay_path
             await db.commit()
 
         except Exception as exc:  # noqa: BLE001

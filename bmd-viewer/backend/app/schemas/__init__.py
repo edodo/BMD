@@ -115,6 +115,8 @@ class BmdMeasurementOut(ORMBase):
     # 측정 신뢰도 (경계 잘림 등). 값은 유지하되 경고 표시용.
     reliable: bool = True
     reliability_warning: str | None = None
+    # 종적 대조용 L4 밀도 격자 (N×N, 0..1/None)
+    l4_density_grid: list | None = None
     model_version: str | None
     computed_at: datetime
     segments: list[VertebraSegmentOut] = []
@@ -147,6 +149,7 @@ class XrayStudyDetail(ORMBase):
     dicom_path: str
     original_filename: str | None = None
     preview_path: str | None
+    overlay_path: str | None = None  # 부분 실패 시 검출 오버레이
     acquired_at: datetime | None
     modality: str | None
     dicom_meta: str | None = None

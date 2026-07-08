@@ -17,6 +17,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     DateTime,
     Enum,
     Float,
@@ -118,6 +119,9 @@ class XrayStudy(Base):
     )
     # 화면 표시용 변환 이미지 (PNG) 경로
     preview_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # 부분 실패(L4 측정 불가) 시 저장하는 검출 오버레이 경로 —
+    # 실패한 스터디도 원본 + 추출한 척추까지 화면에 보여주기 위함.
+    overlay_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     # DICOM 메타데이터 (촬영일 등)
     acquired_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -198,6 +202,8 @@ class BmdMeasurement(Base):
     reliability_warning: Mapped[str | None] = mapped_column(
         Text, nullable=True
     )
+    # 종적 대조용 L4 밀도 격자(N×N, 0..1/None). SQLite엔 JSON(TEXT)로 저장.
+    l4_density_grid: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     computed_at: Mapped[datetime] = mapped_column(

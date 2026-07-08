@@ -95,38 +95,48 @@ export function DensityBasis({
         </div>
       )}
 
-      <p className="desc">
-        {hasScale ? (
-          <>
-            Blue = {fmtAtten(densityLow)}, red = {fmtAtten(densityHigh)}{" "}
-            attenuation. The scale is set <b>per image</b>: blue = local soft
-            tissue next to L4, red = densest bone — <b>air background and metal
-            implants are excluded</b>, so it is robust to framing and to hip
-            prostheses. ★ marks this L4's mean
-            {roiMean != null ? ` (${fmtAtten(roiMean)})` : ""}
-            {bmdValue != null ? ` → BMD index ${bmdValue.toFixed(2)}` : ""}.
-            Warm = denser bone (raises BMD).{" "}
-            {NORMAL_THRESHOLD != null ? (
-              <>
-                The normal/low-density split at index{" "}
-                {NORMAL_THRESHOLD.toFixed(2)} is the configured threshold —
-                validate against DXA before clinical use.
-              </>
-            ) : (
-              <>
-                No normal/abnormal cutoff is applied: this proxy index is not
-                DXA-calibrated, so use it for <b>within-patient change</b>, not
-                absolute diagnosis.
-              </>
-            )}
-          </>
-        ) : (
-          <>
-            Per-pixel attenuation inside the L4 ROI — this is exactly what the
-            BMD value is computed from. Warm = denser bone (raises BMD).
-          </>
-        )}
-      </p>
+      {hasScale ? (
+        <>
+          {/* 텍스트: 색상 의미만 (수치는 위 게이지에 분리 표기) */}
+          <p className="dens-legend">
+            Per-image scale —{" "}
+            <span className="lg blue">soft tissue (blue)</span> →{" "}
+            <span className="lg red">densest bone (red)</span>. <br />
+            Air background & metal excluded (robust to framing / hip prostheses); <br />
+            warm = denser bone.
+          </p>
+          {/* 주의사항: 시각적 콜아웃으로 분리 */}
+          {NORMAL_THRESHOLD != null ? (
+            <div className="dens-caveat warn">
+              <span className="ic" aria-hidden="true">
+                ⚠
+              </span>
+              <p>
+                Normal / low split at index{" "}
+                <b>{NORMAL_THRESHOLD.toFixed(2)}</b> is a configured threshold —{" "}
+                <b>validate against DXA</b> before clinical use.
+              </p>
+            </div>
+          ) : (
+            <div className="dens-caveat info">
+              <span className="ic" aria-hidden="true">
+                ℹ
+              </span>
+              <p>
+                <b>Proxy index — not DXA-calibrated.</b> <br />
+                No normal / abnormal cutoff; <br />
+                Read as <b>within-patient change</b>, not an absolute diagnosis.
+              </p>
+            </div>
+          )}
+        </>
+      ) : (
+        <p className="desc">
+          Per-pixel attenuation inside the L4 ROI <br />
+          — this is exactly what the BMD value is computed from. <br />
+          Warm = denser bone (raises BMD).
+        </p>
+      )}
     </div>
   );
 }

@@ -1,0 +1,74 @@
+1. L4 피질골(cortical bone)과 해면골(trabecular bone) 분리
+2. np.nan 처리가 col1(heatmap)에만 적용되고 compute_bmd와 히스토그램은 roi > 0 전체를 쓰는데, 두 ROI가 동일한지 확인하세요. shrink 전/후가 섞이면 시각화와 수치가 불일치합니다.
+
+3. 절대값이 아니라 텍스처/구조 특징을 추가하세요. 해면골 골소실은 강도보다 trabecular pattern의 성김으로 더 잘 드러납니다 — GLCM, 프랙탈 차원, FFT 기반 spatial frequency 등이 단순 평균보다 문헌상 성능이 좋습니다.
+
+텍스처 특징. 트리아지엔 오버킬일 수 있습니다. 단순 강도만으로 AUC가 충분히 나오면 굳이 GLCM/프랙탈을 안 넣어도 됩니다. 먼저 baseline AUC를 뽑고, 부족할 때만 추가하세요.
+4. ROI Pixel is include
+Trabecular bone
++
+Cortical bone
++
+Endplate
++
+Blood vessel shadow
++
+Projection artifact
++
+Noise
+
+5.
+Texture feature 추가
+골밀도는 Intensity 하나보다 Trabecular pattern 이 중요합니다.
+
+예를 들면
+GLCM
+contrast
+homogeneity
+energy
+entropy
+LBP
+Wavelet
+Fractal
+
+등. 논문에서 많이 사용합니다.
+6.
+L4만 crop해서
+EfficientNet
+ResNet
+ConvNeXt
+등으로 feature를 추출하여 회귀(regression) 모델을 학습시키는 방식입니다. 이 경우 단순 평균 intensity보다 훨씬 풍부한 골소주(trabecular) 패턴 정보를 활용할 수 있습니다.
+7.
+L4 Detection
+      │
+GT Matching
+      │
+Segmentation
+      │
+Morphological Erosion
+      │
+Remove Superior/Inferior Endplates
+      │
+Trabecular Bone ROI
+      │
+CLAHE or Intensity Standardization
+      │
+Trimmed Mean (10~90%)
+      │
+Texture Features (GLCM/LBP)
+      │
+Bone Density Index
+
+8. 현재 방식은 진짜 '골조직 구조'를 본다기보다는 '단순 픽셀 밝기(Intensity)'에 의존하고 있습니다.
+
+1) 영상 정규화(Normalization) 고도화 (필수)
+현재 gray_lin을 사용하고 계시지만, 촬영 장비(GE, Philips, Siemens 등)나 촬영 조건(kVp, mA)에 따라 기본 밝기가 완전히 달라집니다.
+개선안: L4 주변의 연부조직(Soft tissue) 영역이나 공기(Air) 영역의 밝기를 기준으로 L4 내부의 밝기를 상대적 비율로 재정규화하는 알고리즘을 추가해야 장비 간 편차가 줄어듭니다.
+2) 단순 픽셀 통계(Mean)에서 '텍스처 분석(Texture Analysis)'으로 전환
+골밀도가 낮아지면 뼈 내부의 미세 구조(Trabecular microarchitecture)가 무너지면서 X-ray 상에서 '푸석푸석한' 느낌(고주파 노이즈 및 패턴 변화)이 납니다. 단순히 평균 밝기(bmd_mean)만 보면 이를 잡아낼 수 없습니다.
+
+개선안: 픽셀의 밝기 평균 대신, 골조직의 거칠기와 패턴을 분석할 수 있는 알고리즘을 도입하세요.
+GLCM (Gray-Level Co-occurrence Matrix): 뼈의 거칠기(Contrast, Correlation, Entropy) 측정.
+Fractal Dimension (프랙탈 차원 분석): 골조직의 복잡한 그물망 구조가 얼마나 무너졌는지 수학적으로 계산 (DEXA 없이 2D X-ray로 골밀도를 추정할 때 학계에서 가장 많이 쓰는 방식입니다).
+==============
+저비용·고가치·저위험 (라벨 없어도 개선 확실): B 정규화 robust화(gray_lin 퍼센타일 클립 + 가능하면 soft-tissue 상대정규화) → A endplate 제거/erosion → D 절사평균.

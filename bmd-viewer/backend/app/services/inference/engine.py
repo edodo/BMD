@@ -55,6 +55,8 @@ class InferenceResult:
     density_low: float | None = None
     density_high: float | None = None
     roi_mean_attenuation: float | None = None
+    # 종적 대조용 L4 밀도 격자(N×N, 0..1 또는 None). post−pre로 골손실 부위 검출.
+    l4_density_grid: list | None = None
     # 측정 신뢰도: 대상 척추가 이미지 경계에 잘렸거나(truncated) 부적합 영상이면
     # reliable=False, reliability_warning에 사유. 값은 유지하되 프론트에서 경고.
     reliable: bool = True
@@ -64,6 +66,25 @@ class InferenceResult:
     acquired_at: str | None = None       # DICOM 메타에서 추출
     modality: str | None = None
     dicom_meta: dict | None = None       # 추가 DICOM 태그
+
+
+class PartialInferenceError(RuntimeError):
+    """복구 가능한 추론 실패: L4 측정은 불가하나 원본/부분 추출물은 산출됨.
+
+    이미 디스크에 저장된 부분 산출물 경로(preview/overlay)를 담아, 워커가
+    이를 스터디에 기록해 화면에 '원본 + 추출한 척추'까지 보여주고, 실패한
+    L4 분석 영역만 비워 실패 사유를 표시할 수 있게 한다.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        preview_path: str | None = None,
+        overlay_path: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.preview_path = preview_path
+        self.overlay_path = overlay_path
 
 
 class BmdInferenceEngine(abc.ABC):

@@ -4,11 +4,13 @@ import { PatientList } from "@/features/patients/components/PatientList";
 import { StudyHistory } from "@/features/xray/components/StudyHistory";
 import { XrayViewer } from "@/features/xray/components/XrayViewer";
 import { BmdTrendChart } from "@/features/bmd/components/BmdTrendChart";
+import { CompareView } from "@/features/bmd/components/CompareView";
 import type { PatientListItem, XrayStudyListItem } from "@/lib/types";
 
 export function DashboardPage() {
   const [patient, setPatient] = useState<PatientListItem>();
   const [studyId, setStudyId] = useState<string>();
+  const [compare, setCompare] = useState(false);
 
   return (
     <div className="dashboard">
@@ -32,9 +34,19 @@ export function DashboardPage() {
         <>
           <section className="col col-history">
             <header className="patient-header">
-              <h2>{patient.full_name}</h2>
-              <span className="muted">{patient.medical_record_no}</span>
+              <div>
+                <h2>{patient.full_name}</h2>
+                <span className="muted">{patient.medical_record_no}</span>
+              </div>
+              <button
+                className={`compare-toggle${compare ? " active" : ""}`}
+                onClick={() => setCompare((v) => !v)}
+              >
+                {compare ? "✕ Close compare" : "⇄ Compare"}
+              </button>
             </header>
+            {/* Trend를 History 위로 (한눈에 추세 먼저 확인) */}
+            <BmdTrendChart patientId={patient.id} />
             <StudyHistory
               patientId={patient.id}
               selectedStudyId={studyId}
@@ -43,11 +55,12 @@ export function DashboardPage() {
                 if (studyId === id) setStudyId(undefined);
               }}
             />
-            <BmdTrendChart patientId={patient.id} />
           </section>
 
           <main className="col col-viewer">
-            {studyId ? (
+            {compare ? (
+              <CompareView patientId={patient.id} />
+            ) : studyId ? (
               <XrayViewer studyId={studyId} />
             ) : (
               <div className="viewer empty">

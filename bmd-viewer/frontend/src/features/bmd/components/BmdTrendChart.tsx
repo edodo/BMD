@@ -1,8 +1,10 @@
-// BMD 추세 차트: 누적 데이터로 골밀도 변화량 표시.
+// BMD 추세 차트: 누적 데이터로 골밀도 변화량 표시 + 급격한 골손실 임상 경고.
 import {
   CartesianGrid,
+  Label,
   Line,
   LineChart,
+  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -10,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { useBmdTrend } from "@/features/patients/api/queries";
+import { config } from "@/lib/config";
 
 export function BmdTrendChart({ patientId }: { patientId: string }) {
   const { data } = useBmdTrend(patientId);
@@ -23,34 +26,80 @@ export function BmdTrendChart({ patientId }: { patientId: string }) {
     t: p.t_score,
   }));
 
+  // 직전 검사 대비 마지막 검사의 급격한 하락 감지 (단기 골손실 경고)
+  const n = chartData.length;
+  const last = chartData[n - 1];
+  const prev = n >= 2 ? chartData[n - 2] : null;
+  const stepDropPct =
+    prev && prev.bmd > 0 ? ((prev.bmd - last.bmd) / prev.bmd) * 100 : 0;
+  const alert = stepDropPct >= config.significantLossPct;
+
   return (
-    <div className="trend">
+    <div className={`trend${alert ? " alert" : ""}`}>
       <div className="trend-header">
         <h3>{data.target_vertebra} Bone Density Trend</h3>
         {data.delta_percent != null && (
           <span
-            className={`delta ${data.delta_percent >= 0 ? "up" : "down"}`}
+            className={`delta ${
+              alert ? "danger" : data.delta_percent >= 0 ? "up" : "down"
+            }`}
           >
             {data.delta_percent >= 0 ? "▲" : "▼"}{" "}
             {Math.abs(data.delta_percent).toFixed(1)}%
           </span>
         )}
       </div>
+
+      {alert && (
+        <div className="trend-alert" role="alert">
+          <span className="flag" aria-hidden="true">
+            ⚠
+          </span>
+          <span>
+            <b>Significant Bone Loss</b> — {stepDropPct.toFixed(1)}% drop since
+            the previous exam (≥ {config.significantLossPct}%).
+          </span>
+        </div>
+      )}
+
       <ResponsiveContainer width="100%" height={240}>
-        <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+        <LineChart
+          data={chartData}
+          margin={{ top: 18, right: 16, bottom: 8, left: 0 }}
+        >
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
           <XAxis dataKey="date" fontSize={12} />
           <YAxis domain={["auto", "auto"]} fontSize={12} />
           <Tooltip />
-          {/* 골다공증 임계 참고선 (T-score -2.5 상당, 예시) */}
+          {/* 골다공증 임계 참고선 (예시, 미보정) */}
           <ReferenceLine y={0.7} stroke="#dc2626" strokeDasharray="4 4" />
           <Line
             type="monotone"
             dataKey="bmd"
-            stroke="#2563eb"
+            stroke={alert ? "#dc2626" : "#2563eb"}
             strokeWidth={2}
             dot={{ r: 4 }}
           />
+          {/* 급락 시 마지막 지점을 빨간 플래그로 강조 */}
+          {alert && (
+            <ReferenceDot
+              x={last.date}
+              y={last.bmd}
+              r={6}
+              fill="#dc2626"
+              stroke="#fff"
+              strokeWidth={2}
+              isFront
+            >
+              <Label
+                value="⚠ Significant Bone Loss"
+                position="top"
+                fill="#b91c1c"
+                fontSize={11}
+                fontWeight={700}
+              />
+            </ReferenceDot>
+          )}
         </LineChart>
       </ResponsiveContainer>
     </div>

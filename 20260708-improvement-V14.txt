@@ -1,0 +1,18 @@
+v14 변경 (L1~L4 평균 BMD + CSV)
+추가된 헬퍼 — cell 17
+
+vertebra_masks(rgb): seg.predict 한 번으로 L1~L5 마디별 최고신뢰 마스크 딕셔너리 반환 (기존 poly_to_mask 재사용).
+compute_spine_bmd(gray_lin, rgb): L1~L4 각각 trabecular_roi + compute_bmd(trimmed + soft-tissue-relative) → 개별값 + L1-L4 평균(bmd_L1L4_mean, bmd_rel_L1L4_mean, n_vert) 반환.
+새 셀 Step 6b — cell 28
+
+테스트 DICOM 전체를 돌며 마디별 + 평균 BMD를 계산 → metrics/L1L4_spine_bmd.csv로 저장.
+컬럼: file, bmd_L1..bmd_L4, bmd_rel_L1..L4, n_vert, bmd_L1L4_mean, bmd_rel_L1L4_mean.
+한 샘플에 대해 마디별 trabecular ROI(색상별) + L1-L4 평균 막대그래프 시각화(step6b_spine_L1L4_bmd.png 저장) + 상위 10행 표 출력.
+왜 이게 개선인가
+임상 DXA 요추 BMD = L1-L4 평균 관례와 정합.
+단일 L4보다 마디별 노이즈/이상치에 강건(한 마디 검출 실패해도 나머지로 평균, n_vert로 추적).
+이미 있는 마스크만 재사용 → 추가 비용 거의 없음.
+Feng 2024 논문의 "과도한 matting은 CNN 분류에 해롭다"는 경고는 수제 밀도 측정인 여기엔 무관하므로, trabecular ROI 격리는 그대로 유지했습니다.
+검증: 35셀 전부 문법 통과, compute_spine_bmd 정의 1·호출 2, CSV 저장 확인, Step 6→6b→7 순서 정상.
+
+torch/데이터가 이 환경엔 없어 직접 실행은 못 했습니다. 실행 후 Step 6b에서 L1L4_spine_bmd.csv가 생기고 마디별 막대 + 평균선이 뜨는지 확인해 주세요. 참고로 테스트셋 GT는 L4만 있어 L1-L3는 예측 마스크 기반입니다(의도된 동작).

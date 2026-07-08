@@ -1,0 +1,22 @@
+골조직 추출 & 골밀도 측정 구조
+전체 흐름은 원본 → 정규화 → 마스크 → 골조직(trabecular) ROI 추출 → 골밀도 계산의 5단계입니다.
+1단계 — 이미지 로딩 & 정규화 (load_xray)
+DICOM/이미지를 읽어 RescaleSlope/Intercept로 실제 픽셀값을 복원하고, MONOCHROME1이면 반전시켜 뼈가 밝게 나오도록 만듭니다. 핵심은 0.5/99.5 백분위 윈도우로 정규화(gray_lin ∈ [0,1])하는 것입니다. min/max 대신 백분위를 쓰기 때문에 hot/dead 픽셀 하나가 전체 골밀도 정규화를 왜곡하지 않습니다(v13 수정).
+2단계 — L4 마스크 확보 (l4_mask_for)
+GT 마스크가 있으면 그것을 쓰고, 없으면 YOLO 세그멘테이션 결과를 사용합니다. 이 마스크는 아직 피질골(cortical)까지 포함한 **전체 추체(full_mask)**입니다.
+3단계 — 골조직 ROI 추출 (trabecular_roi) ← 골조직 추출의 핵심
+전체 추체 마스크에서 실제 해면골(cancellous/trabecular bone)만 남기는 2단계 정제:
+
+(a) Erosion — erode_frac=0.10. 추체 높이의 10% 커널로 침식해 바깥쪽 **치밀한 피질골 테두리(cortical rim)**를 제거합니다.
+(b) Endplate 제거 — endplate_frac=0.18. 위·아래 각 18% 밴드(가장 밝고 오염이 심한 종판/endplate)를 잘라냅니다.
+결과가 10픽셀 미만으로 너무 작아지면 shrink_mask(중심 방향 축소)로 안전하게 폴백합니다.
+
+이렇게 남은 것이 피질골·종판·투영 경계가 제거된 순수 해면골 영역이라, 강도/텍스처가 실제 골밀도를 반영합니다.
+4단계 — 골밀도 계산 (compute_bmd) ← 골밀도 측정의 핵심
+ROI 내부 픽셀 강도값으로 프록시 BMD를 산출합니다:
+
+bmd_trimmed (주 지표): 10–90% 절사평균(trimmed mean). p10 아래·p90 위 이상치(잔여 종판/혈관 등)를 버리고 중심 80%만 평균 → 강건함.
+bmd_rel (장비-강건 상대 지표): soft_tissue_ref가 추체 좌우 옆의 연부조직(paraspinal soft-tissue) 중앙값을 측정하고, bmd_trimmed / soft_tissue_ref로 나눕니다. 촬영 장비·노출·게인 차이를 상쇄합니다.
+
+5단계 — 임상 요약 (compute_spine_bmd)
+L1~L4 각각에 3·4단계를 적용하고 평균 내어, 임상 DXA의 요추 BMD 관례(L1–L4 평균)와 맞춥니다.

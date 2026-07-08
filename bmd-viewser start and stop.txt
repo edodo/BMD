@@ -1,2 +1,5 @@
 docker compose down -v
 docker compose up --build
+
+docker exec -it bmd-viewer-backend-1 sh
+docker cp bmd-viewer-backend-1:/app/app.db ./app.db

@@ -1,10 +1,11 @@
-// Patient detail: X-ray history list + upload + delete.
-import { useRef } from "react";
+// Patient detail: X-ray history list + upload + delete (paged).
+import { useEffect, useRef, useState } from "react";
 import {
   useStudies,
   useUploadStudy,
   useDeleteStudy,
 } from "@/features/patients/api/queries";
+import { config } from "@/lib/config";
 import type { XrayStudyListItem } from "@/lib/types";
 
 const statusLabel: Record<string, string> = {
@@ -42,6 +43,18 @@ export function StudyHistory({
   const del = useDeleteStudy(patientId);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // 페이징 (config.historyPageSize). 환자 전환 시 1페이지로 초기화.
+  const [page, setPage] = useState(0);
+  useEffect(() => setPage(0), [patientId]);
+  const pageSize = config.historyPageSize;
+  const total = data?.length ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageItems = (data ?? []).slice(
+    safePage * pageSize,
+    safePage * pageSize + pageSize
+  );
+
   const handleDelete = (e: React.MouseEvent, s: XrayStudyListItem) => {
     e.stopPropagation();
     const ok = window.confirm(
@@ -73,7 +86,7 @@ export function StudyHistory({
       </div>
       {upload.isPending && <p className="muted">Uploading…</p>}
       <ul>
-        {data?.map((s) => (
+        {pageItems.map((s) => (
           <li
             key={s.id}
             className={s.id === selectedStudyId ? "selected" : ""}
@@ -105,6 +118,25 @@ export function StudyHistory({
           </li>
         ))}
       </ul>
+      {total > pageSize && (
+        <div className="pager">
+          <button
+            disabled={safePage <= 0}
+            onClick={() => setPage(safePage - 1)}
+          >
+            ‹ Prev
+          </button>
+          <span className="pager-info">
+            {safePage + 1} / {pageCount}
+          </span>
+          <button
+            disabled={safePage >= pageCount - 1}
+            onClick={() => setPage(safePage + 1)}
+          >
+            Next ›
+          </button>
+        </div>
+      )}
     </div>
   );
 }

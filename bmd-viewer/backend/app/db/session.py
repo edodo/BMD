@@ -71,23 +71,30 @@ def _apply_lightweight_migrations(conn) -> None:
     from sqlalchemy import inspect, text
 
     inspector = inspect(conn)
-    try:
-        existing = {c["name"] for c in inspector.get_columns("bmd_measurements")}
-    except Exception:  # noqa: BLE001 — 테이블이 아직 없으면 create_all이 처리
-        return
+
+    def _add_missing(table: str, additions: dict[str, str]) -> None:
+        try:
+            existing = {c["name"] for c in inspector.get_columns(table)}
+        except Exception:  # noqa: BLE001 — 테이블이 없으면 create_all이 처리
+            return
+        for col, ddl in additions.items():
+            if col not in existing:
+                conn.execute(
+                    text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+                )
 
     # (컬럼명, DDL 타입) — 누락 시에만 ADD COLUMN
-    additions = {
-        "xai_overlay_path": "VARCHAR(512)",
-        "xai_l4_cam_path": "VARCHAR(512)",
-        "density_low": "FLOAT",
-        "density_high": "FLOAT",
-        "roi_mean_intensity": "FLOAT",
-        "reliable": "BOOLEAN DEFAULT 1",
-        "reliability_warning": "TEXT",
-    }
-    for col, ddl in additions.items():
-        if col not in existing:
-            conn.execute(
-                text(f"ALTER TABLE bmd_measurements ADD COLUMN {col} {ddl}")
-            )
+    _add_missing(
+        "bmd_measurements",
+        {
+            "xai_overlay_path": "VARCHAR(512)",
+            "xai_l4_cam_path": "VARCHAR(512)",
+            "density_low": "FLOAT",
+            "density_high": "FLOAT",
+            "roi_mean_intensity": "FLOAT",
+            "reliable": "BOOLEAN DEFAULT 1",
+            "reliability_warning": "TEXT",
+            "l4_density_grid": "JSON",
+        },
+    )
+    _add_missing("xray_studies", {"overlay_path": "VARCHAR(512)"})

@@ -23,7 +23,59 @@ body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 .patient-list .name { font-weight: 600; }
 .patient-list .meta { display: flex; gap: 10px; flex-wrap: wrap; color: var(--muted);
   font-size: 12px; margin-top: 4px; }
+.patient-header { display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 8px; }
 .patient-header h2 { margin: 0 0 2px; }
+.compare-toggle { padding: 6px 10px; font-size: 12px; border: 1px solid var(--border);
+  background: var(--panel); border-radius: 7px; cursor: pointer; white-space: nowrap; }
+.compare-toggle.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+
+/* ---------- 종적 대조(Compare) 뷰 ---------- */
+.compare-view { height: 100%; overflow-y: auto; padding-right: 6px; }
+.cmp-toolbar { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; }
+.cmp-toolbar h3 { margin: 0; font-size: 16px; }
+.cmp-contrast { display: flex; align-items: center; gap: 6px; font-size: 13px;
+  color: var(--text); }
+.cmp-pickers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  margin: 12px 0 16px; }
+.cmp-picker { border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
+.cmp-picker h4 { margin: 0 0 8px; font-size: 13px; }
+.cmp-picker ul { list-style: none; margin: 0; padding: 0; max-height: 180px;
+  overflow-y: auto; }
+.cmp-picker li { margin: 0; }
+.cmp-picker label { display: flex; align-items: center; gap: 8px; padding: 4px 2px;
+  font-size: 13px; cursor: pointer; }
+.cmp-picker label .muted { margin-left: auto; }
+
+.cmp-strip { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px;
+  align-items: flex-start; }
+.cmp-card { flex: 0 0 240px; border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px; background: var(--panel); }
+.cmp-card.pre { border-color: #93c5fd; }
+.cmp-card.post { border-color: #fca5a5; }
+.cmp-card-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
+  font-size: 12px; }
+.cmp-tag { font-weight: 700; font-size: 11px; padding: 1px 6px; border-radius: 4px; }
+.cmp-tag.pre { background: #dbeafe; color: #1d4ed8; }
+.cmp-tag.post { background: #fee2e2; color: #b91c1c; }
+.cmp-date { color: var(--muted); }
+.cmp-bmd { margin-left: auto; font-weight: 600; }
+.cmp-img { width: 100%; border-radius: 6px; border: 1px solid var(--border);
+  display: block; margin-bottom: 8px; }
+.cmp-img.placeholder { display: grid; place-items: center; height: 120px;
+  color: var(--muted); font-size: 12px; }
+.cmp-empty, .cmp-picker + .cmp-empty { color: var(--muted); padding: 24px 0;
+  text-align: center; }
+
+/* 골손실 격자 (post−pre 음수 셀을 붉게) */
+.bone-loss { margin-top: 2px; }
+.bone-loss-grid { display: grid; width: 100%; aspect-ratio: 1 / 1;
+  border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+  background: #f8fafc; }
+.bone-loss-grid span { border-right: 1px solid rgba(148,163,184,0.15);
+  border-bottom: 1px solid rgba(148,163,184,0.15); }
+.bone-loss-cap { margin: 5px 0 0; font-size: 10px; color: var(--muted); }
 .study-history .toolbar { display: flex; align-items: center; gap: 8px; margin: 16px 0 8px; }
 .study-history .toolbar h3 { margin: 0; flex: 1; font-size: 14px; }
 button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
@@ -71,6 +123,12 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
 .bmd-warning p { margin: 3px 0 0; font-size: 12px; color: #991b1b; }
 .bmd-headline.unreliable { border-color: #fecaca; background: #fff7f7; }
 .bmd-headline.unreliable .value { color: #b91c1c; }
+/* 실패 스터디: L4 분석 영역 비움 표시 */
+.fail-placeholder { display: flex; flex-direction: column; padding: 14px;
+  background: var(--panel); border: 1px dashed var(--border); border-radius: 10px; }
+.fail-placeholder .label { color: var(--muted); font-size: 12px; }
+.fail-placeholder .value { font-size: 34px; font-weight: 700; color: #cbd5e1; }
+.fail-placeholder .muted { margin: 4px 0 0; font-size: 12px; }
 .bmd-headline .label { color: var(--muted); font-size: 12px; }
 .bmd-headline .value { font-size: 34px; font-weight: 700; }
 .bmd-headline .tscore { color: var(--accent); font-size: 13px; }
@@ -131,12 +189,65 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
   margin-top: 4px; }
 .dens-gauge .dens-minmax span { font-size: 9px; color: var(--muted); opacity: 0.6; }
 .dens-gauge .dens-minmax em { font-style: normal; }
+
+/* 수치(게이지)와 분리된 텍스트 범례 + 주의사항 콜아웃 */
+.density-basis .dens-legend { margin: 12px 0 0; padding-top: 10px;
+  border-top: 1px solid var(--border); font-size: 11px; line-height: 1.5;
+  color: var(--muted); }
+.density-basis .dens-legend .lg { font-weight: 700; }
+.density-basis .dens-legend .lg.blue { color: #1d4ed8; }
+.density-basis .dens-legend .lg.red { color: #dc2626; }
+.density-basis .dens-caveat { display: flex; gap: 8px; align-items: flex-start;
+  margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 11px;
+  line-height: 1.45; }
+.density-basis .dens-caveat .ic { font-size: 14px; line-height: 1.1; flex: none; }
+.density-basis .dens-caveat p { margin: 0; }
+.density-basis .dens-caveat.info { background: #eff6ff; border: 1px solid #bfdbfe;
+  color: #1e40af; }
+.density-basis .dens-caveat.info .ic { color: #2563eb; }
+.density-basis .dens-caveat.warn { background: #fffbeb; border: 1px solid #fde68a;
+  color: #92400e; }
+.density-basis .dens-caveat.warn .ic { color: #d97706; }
 .trend { margin-top: 20px; padding: 14px; background: var(--panel);
   border: 1px solid var(--border); border-radius: 10px; }
+.trend.alert { border-color: #fecaca; box-shadow: 0 0 0 1px #fecaca inset; }
 .trend-header { display: flex; justify-content: space-between; align-items: center; }
 .trend-header h3 { margin: 0; font-size: 14px; }
 .delta.up { color: #16a34a; } .delta.down { color: var(--target); }
+.delta.danger { color: #dc2626; font-weight: 700; }
 .trend.empty { color: var(--muted); }
+/* 급격한 골손실 경고 배너 */
+.trend-alert { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0 4px;
+  padding: 8px 10px; background: #fef2f2; border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626; border-radius: 8px; color: #7f1d1d; font-size: 12px; }
+.trend-alert .flag { color: #dc2626; font-size: 15px; line-height: 1; }
+.trend-alert b { color: #b91c1c; }
+
+/* ---------- History 페이저 ---------- */
+.pager { display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin-top: 8px; }
+.pager button { padding: 4px 10px; font-size: 12px; border: 1px solid var(--border);
+  background: var(--panel); border-radius: 6px; cursor: pointer; }
+.pager button:disabled { opacity: 0.4; cursor: default; }
+.pager-info { font-size: 12px; color: var(--muted); }
+
+/* ---------- XAI 신호등(Green-Yellow-Red) 게이지 ---------- */
+.xai-clinical .lbl { display: inline-flex; align-items: center; gap: 6px; }
+.tl-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.tl-dot.good { background: #16a34a; } .tl-dot.caution { background: #d97706; }
+.tl-dot.risk { background: #dc2626; } .tl-dot.info { background: #94a3b8; }
+.tl-badge { font-size: 11px; font-weight: 600; }
+.tl-badge.good { color: #16a34a; } .tl-badge.caution { color: #d97706; }
+.tl-badge.risk { color: #dc2626; } .tl-badge.info { color: #94a3b8; }
+.tl-gauge { display: flex; gap: 3px; margin-top: 4px; }
+.tl-gauge .seg { flex: 1; height: 7px; border-radius: 3px; opacity: 0.22; }
+.tl-gauge .seg.good { background: #16a34a; }
+.tl-gauge .seg.caution { background: #d97706; }
+.tl-gauge .seg.risk { background: #dc2626; }
+.tl-gauge.sig-good .seg.good,
+.tl-gauge.sig-caution .seg.caution,
+.tl-gauge.sig-risk .seg.risk { opacity: 1; }
+.tl-gauge.sig-info .seg { background: #94a3b8; opacity: 0.45; }
 
 /* ---------- 인증 화면 ---------- */
 .auth-screen { height: 100vh; display: grid; place-items: center; background: var(--bg); }

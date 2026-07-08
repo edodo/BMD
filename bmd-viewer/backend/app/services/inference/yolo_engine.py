@@ -24,6 +24,7 @@ from app.core.config import settings
 from app.services.inference.engine import (
     BmdInferenceEngine,
     InferenceResult,
+    PartialInferenceError,
     SegmentResult,
     XaiResult,
 )
@@ -424,6 +425,72 @@ class YoloBmdEngine(BmdInferenceEngine):
         score = (mean_dens - low) / (high - low)
         return round(float(np.clip(score, 0.0, 1.0)), 3)
 
+    @classmethod
+    def _draw_detection_overlay(cls, rgb, masks_xy, classes, boxes, W, H, l4_i=None):
+        """검출된 척추들의 폴리곤 외곽선 + 라벨을 그린 오버레이.
+
+        부분 실패(L4 식별 불가) 시 '추출한 것'을 화면에 보여주기 위해 쓰인다.
+        l4_i가 주어지면 해당 척추만 빨강으로 강조, 그 외는 파랑.
+        """
+        vis = rgb.copy()
+        for i in range(len(boxes)):
+            poly = np.asarray(masks_xy[i], dtype=np.int32)
+            if poly.size == 0:
+                continue
+            is_l4 = l4_i is not None and i == l4_i
+            color = (255, 0, 0) if is_l4 else (0, 170, 255)
+            thick = 2 if is_l4 else 1
+            cv2.polylines(vis, [poly], isClosed=True, color=color, thickness=thick)
+            cid = classes[i]
+            label = CLASS_NAMES[cid] if 0 <= cid < len(CLASS_NAMES) else str(cid)
+            lx = int(poly[:, 0].min())
+            rx = int(poly[:, 0].max())
+            cy_box = int((poly[:, 1].min() + poly[:, 1].max()) / 2)
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            fscale = 0.55
+            fthick = 2 if is_l4 else 1
+            (tw, th), _ = cv2.getTextSize(label, font, fscale, fthick)
+            gap = 8
+            tx = lx - gap - tw if lx - gap - tw >= 0 else min(rx + gap, W - tw)
+            ty = cy_box + th // 2
+            cv2.putText(
+                vis, label, (tx, ty), font, fscale, color, fthick, cv2.LINE_AA
+            )
+        return vis
+
+    @staticmethod
+    def _density_grid(dens, mask, valid, low, high, n):
+        """L4 ROI를 bbox 기준 N×N 격자로 리샘플한 정규화 밀도(0..1).
+
+        종적 대조(compare)용. 서로 다른 두 X-ray의 L4를 각자 bbox로 정규화하므로
+        셀(i,j)은 두 검사에서 '척추체 내 같은 상대 위치'를 뜻한다(강체정합은 아님).
+        post − pre 격자가 음수인 셀 = 그 부위 골밀도 감소(골손실).
+        각 셀 값 = (mask & valid) 픽셀의 평균 score, 유효 픽셀 없으면 None.
+        """
+        ys, xs = np.where(mask > 0)
+        if ys.size == 0:
+            return None
+        y0, y1 = int(ys.min()), int(ys.max()) + 1
+        x0, x1 = int(xs.min()), int(xs.max()) + 1
+        score = np.clip((dens - low) / max(high - low, 1e-6), 0.0, 1.0)
+        sel = (mask > 0) & valid
+        y_edges = np.linspace(y0, y1, n + 1).astype(int)
+        x_edges = np.linspace(x0, x1, n + 1).astype(int)
+        grid: list[list[float | None]] = []
+        for r in range(n):
+            row: list[float | None] = []
+            for c in range(n):
+                cy0, cy1 = y_edges[r], y_edges[r + 1]
+                cx0, cx1 = x_edges[c], x_edges[c + 1]
+                cell = sel[cy0:cy1, cx0:cx1]
+                if cell.any():
+                    vals = score[cy0:cy1, cx0:cx1][cell]
+                    row.append(round(float(vals.mean()), 4))
+                else:
+                    row.append(None)
+            grid.append(row)
+        return grid
+
     # ---------- 메인 ----------
     def run(self, dicom_path: Path, output_dir: Path) -> InferenceResult:
         model = self._ensure_model()
@@ -439,6 +506,7 @@ class YoloBmdEngine(BmdInferenceEngine):
             str(output_dir / preview_name),
             cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR),
         )
+        preview_rel = f"{output_dir.name}/{preview_name}"
 
         # Eigen-CAM 훅 준비: predict 동안 네크 활성맵을 포착한다.
         cam_hooker = self._ensure_cam()
@@ -447,7 +515,11 @@ class YoloBmdEngine(BmdInferenceEngine):
 
         r = model.predict(rgb, conf=CONF, imgsz=IMGSZ, verbose=False)[0]
         if r.masks is None or len(r.boxes) == 0:
-            raise RuntimeError("No vertebrae detected (check image quality/exposure)")
+            # 원본은 이미 저장됨 → 화면에 원본만 보여주고 실패 표시
+            raise PartialInferenceError(
+                "No vertebrae detected (check image quality/exposure)",
+                preview_path=preview_rel,
+            )
 
         boxes = r.boxes.xyxy.cpu().numpy()
         classes = r.boxes.cls.cpu().numpy().astype(int)
@@ -455,7 +527,20 @@ class YoloBmdEngine(BmdInferenceEngine):
 
         l4_i, status = self._pick_l4_index(boxes, classes, confs)
         if l4_i is None:
-            raise RuntimeError(f"Could not identify L4: {status}")
+            # L4는 못 찾았지만 검출된 척추는 그려서 '추출한 것'까지 보여준다
+            det_vis = self._draw_detection_overlay(
+                rgb, r.masks.xy, classes, boxes, W, H
+            )
+            det_name = "detection.png"
+            cv2.imwrite(
+                str(output_dir / det_name),
+                cv2.cvtColor(det_vis, cv2.COLOR_RGB2BGR),
+            )
+            raise PartialInferenceError(
+                f"Could not identify L4: {status}",
+                preview_path=preview_rel,
+                overlay_path=f"{output_dir.name}/{det_name}",
+            )
 
         # 측정 신뢰도: 대상 척추가 이미지 경계에 잘렸는지 등 (값은 유지, 경고만).
         reliable, reliability_warning = self._reliability(
@@ -498,7 +583,19 @@ class YoloBmdEngine(BmdInferenceEngine):
             # 전부 금속/배경으로 걸러진 극단 상황 → 원 ROI로 폴백
             vals = dens[mask > 0]
         if vals.size == 0:
-            raise RuntimeError("L4 mask is empty")
+            det_vis = self._draw_detection_overlay(
+                rgb, r.masks.xy, classes, boxes, W, H, l4_i=l4_i
+            )
+            det_name = "detection.png"
+            cv2.imwrite(
+                str(output_dir / det_name),
+                cv2.cvtColor(det_vis, cv2.COLOR_RGB2BGR),
+            )
+            raise PartialInferenceError(
+                "L4 detected but ROI is empty (mask/exposure issue)",
+                preview_path=preview_rel,
+                overlay_path=f"{output_dir.name}/{det_name}",
+            )
 
         mean_d = float(vals.mean())
         median_d = float(np.median(vals))
@@ -513,6 +610,10 @@ class YoloBmdEngine(BmdInferenceEngine):
             vals,
         )
         bmd_value = self._bmd_score(mean_d, low_anchor, high_anchor)
+        # 종적 대조용 L4 밀도 격자 (post−pre로 골손실 부위 검출)
+        density_grid = self._density_grid(
+            dens, mask, valid, low_anchor, high_anchor, settings.bmd_diff_grid_n
+        )
 
         # Overlay: draw the actual segmentation polygon outline for every
         # detected vertebra. L4 (target) in red + light tint, others in blue.
@@ -670,6 +771,7 @@ class YoloBmdEngine(BmdInferenceEngine):
             density_low=round(low_anchor, 1),
             density_high=round(high_anchor, 1),
             roi_mean_attenuation=round(mean_d, 1),
+            l4_density_grid=density_grid,
             reliable=reliable,
             reliability_warning=reliability_warning,
             segments=segments,
