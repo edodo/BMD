@@ -1,0 +1,147 @@
+Hello, everyone. Nice to meet you. My name is Edward.
+I’m a postgraduate student at Fanshawe College, studying AI and Machine Learning.
+Before this, I worked as a software architect in South Korea for over 20 years, specializing in the banking sector.
+===========
+'I built an automatic tool that measures bone quality of the L4 spine vertebra directly from the X-rays you already take. 
+No extra scan, no extra radiation dose. 
+I'll show what it does, how accurate it is, and what we still need to fix before clinical use.'
+===========
+‘This is not replacing DXA. 
+It extracts consistent and automated bone structures from images you already have. 
+It extracts two things: density (how bright and dense the bones appear) and texture (the patterns within the bones).
+
+However, this is only an approximation and is not corrected to actual bone density units.
+===========
+The pipeline consists of four stages.
+It takes an X-ray image, has the AI ​​locate the L4 vertebra and outline it,
+measures the L4 Bone structure in that area, and reports the values ​​along with a heatmap showing where the AI ​​found it.
+I upgraded the model from Yolo 8 to Yolo 26 last week.
+===========
+I will show you the overall scope and specific methodology of this research.
+If you look at Imaging modalities, there are various options ranging from standard diagnostic equipment like DXA to CT and MRI. Among these, what we focused on is X-ray.
+The purpose of this project is to establish an 'Opportunistic screening' pipeline for osteoporosis risk.
+===========
+Our AI architecture is a pipeline that fuses Statistical Texture Analysis (GLCM), Deep Learning-based Segmentation (YOLO), and Explainable AI (Seg-Grad-CAM).
+===========
+For the training and validation datasets, 4,000 samples were used from the AP (Anteroposterior) and LA (Lateral) BUU datasets, and 42 DICOM files were used for the test dataset.
+===========
+This is AI segmentation (YOLOv8-seg).
+Draws the outlines of each vertebra (L1–L5).
+L4 is selected based on the label, and primarily the fourth vertebra from the top is selected as the object.
+This is a frontal and side training photo, and on the right is the L4 extracted from an actual X-ray DICOM file.
+===========
+The accuracy of the training data is high at 0.97 mAP (mean Average precision). The maximum value is 1.
+Therefore, the detector itself is strong.
+
+This is called the confusion matrix, which shows how well it locates the bones of L1 through L5.
+All core losses sloped downward and converged stably across both the train and validation sets, and a robust model was built without overfitting.
+
+Analysis of performance metrics revealed excellent convergence in both Box (location detection) and Mask (contour segmentation) metrics.
+Combining the stable decrease in the loss graph with the upward trend of the metrics, this model has achieved high reliability in accurately detecting spinal locations and precisely segmenting the contours of bone structures.
+
+===========
+This is an important point.
+I found 39 out of 42 L4s.
+However, only 15 matched my labels.
+Since I am not a doctor and lack experience, it was difficult for me to draw the correct L4s by looking at the X-ray images when writing the labels.
+I will show you the actual data.
+===========
+'This shows the problem visually. 
+Yellow is the true L4 , I marked it.  
+Red is the AI's L4. In the bad cases the red is one level too high. 
+The shapes are right - it is a counting / field-of-view problem, not a segmentation failure.’
+
+I am having difficulty naming the L4 bone.
+It is difficult to distinguish bones in X-ray images.
+From what I could see, the sacrum and L5 were indistinguishable.
+===========
+These are the 39 images from which the lumbar spine was extracted.
+and
+These are the 3 images from which the lumbar spine was not extracted.
+===========
+Out of 39, these are the yellow parts I masked and the green L4 area found by AI.
+Looking at the red area, it seems like the AI ​​found it is correct compared to what I masked.
+===========
+'Trust matters in medicine. 
+This heatmap shows the pixels the AI used. 
+It focuses on the L4 bone itself and its trabecular pattern which is the same thing a radiologist would look at. 
+Therefore, you can visually see the reasons why the labels were selected from an AI perspective.
+===========
+
+"Next, Our Bone Density and Structure Measurement Procedure.
+This pipeline is currently under active research and is subject to continuous changes and updates
+
+First, Region of Interest (ROI) Isolation: To focus purely on the microarchitecture that reflects bone loss, I remove the cortical bone and the top and bottom endplates. 
+This isolation process allows us to extract and analyze the cancellous bone exclusively.
+
+Second, Feature Extraction: From this isolated cancellous region, I compute the Bone Attenuation Ratio to capture overall density. Concurrently, to deeply analyze the bone’s structural patterns, i extract three categories of texture features: the GLCM5 metrics for local homogeneity and complexity, the Variation Slope, and the Fractal Dimension for structural self-similarity.
+
+Future Scope: Currently, this pipeline is optimized to calculate the density and texture of the L4 vertebra specifically. 
+As a next step to enhance diagnostic robustment, I plan to expand this scope to calculate and utilize the average bone mineral density across the L1 to L4 vertebrae.
+===========
+The core engine is functioning well, and the results are explainable.
+
+As mentioned last time, I have difficulties with L4 labeling.
+I have created a sample application, so you can upload an actual X-ray file to verify the labeling results.
+If the results differ significantly from expectations, I will request labeling support.
+
+In the future, I would like to improve accuracy by comparing AI results with actual DEXA data.
+However, this is not current project stage, items 2 and 3 have been excluded from the scope of research. 
+Therefore, those items are struck through.
+===========
+In short,
+
+You can automatically obtain explainable bone density and texture signals from routine X-ray images.
+
+This method is valid,
+
+although there is one missing labeling step remaining. 
+For now, I think you just need to try using the software and check the results.
+
+If the results are satisfactory, I think we don't need to perform the labeling.
+
+===========
+I’ll show you sample software
+
+According to the schedule, building the infrastructure and designing and developing the software begins in September.
+
+However, to make it easier for you to understand, I have created a simple version.
+
+And even if I cannot answer your question properly, I will write an answer and provide feedback later.
+
+
+please wait for a moment.
+===========
+First, this is log in page.
+
+On the left is the patient list, where you can register or delete patients.
+The next screen is the X-ray list, where you can view the X-ray images in chronological order.
+
+At the top, you can see the changes in bone density values ​​for the uploaded X-ray files in sequence.
+
+Please note that the samples I have are not X-ray files from a single person, but from multiple people.
+When looking at the registered X-ray files, the vertebrae is displayed, L4 is extracted, and the ROI is indicated.
+This is the metadata of the X-ray file.
+
+This is the part where the AI ​​looks at the density.
+Blue indicates low-density areas, and red indicates high-density areas.
+Air and metallic materials are excluded from the calculation.
+Since this is not a DEXA measurement method, the values ​​may vary from patient to patient.
+
+On the right, the status and values ​​based on the AI's judgment are displayed, 
+and at the bottom, the view of L4 as seen by the AI ​​is shown.
+
+In case of failure, you can check the reason for the failure.
+
+In addition, you can select a pre-operative X-ray image and choose an image to compare with the post-operative X-ray image.
+
+I added a loss grid because I thought visual recognition might not be fast enough.
+
+The red area indicates the region that was strong before surgery. In other words, the larger the red area, the weaker it becomes.
+
+This is all I have prepared.
+
+Thank you.
+====================
+
+segmentation.

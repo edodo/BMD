@@ -1,0 +1,170 @@
+instead of just a heat map um like is there a way to almost normalize based off that as like the background
+it might help with some of the almost normalization of the the numbers
+the relative density between the bone and then the background 
+
+she doesn't necessarily use it to to obviously like make a diagnosis on bone density she just looks at the relative distance, difference densities well I don't know if you can even call it densities just the relative pixel intensities at this point
+
+it would be interesting if if we could actually test this on like a control data set. Like even if it's scanning like some sort of phantom, like you put a phantom in with different densities and you scan it with um known kind of like you know kilo volts and milliampers and set distance away from the x-ray.
+
+Q
+ it looks like there's a bounding box. I don't know um Edward if you're using like label me or using like CV AI for the labeling.
+But so when you when you train your algorithm for the mask prediction is that using the bounding box data or is  using the segmentation from 3D slicer
+
+I guess if the goal actually is to try and get like a absolute value for density 
+
+Q
+What what are the thoughts around validating this algorithm?
+
+-> brent :  I think we're going to need to have like a clinical expert go through a bunch of them to make sure that we're at the L4 and all that too
+-> Irene : it's get um expert like some sort of expert confirmation.
+
+Q
+ I think we're going to have to um and the other question was about the L4. Is there a reason why L4 is chosen specifically
+-> Edward : L5 is uh the other bone is has the the other bones and buried in the flesh, L4 I can measure easily.
+-> Brent :  Edward explained to me before that L5 was uh particularly hard to identify. with the overly of the iliac wings and stuff.
+ we could probably work our way down to L1 from L1 to L5 just based on this working model.
+
+Q
+So, if you look at like L5, is it look is the heat map looking similar?
+I don't think you've done L5. You haven't done L5, have you?
+-> Edward : Yeah, I didn't. I just focused on the L4
+
+Q
+you've created like a web gui is like like a website?
+And and so is the plan to have this hosted on a website that clinicians can use it.
+-> Edward : You can use this this uh this website. Yeah, that's why I I make this one
+
+
+Q
+is it is it using the actual trained AI model
+-> Edward : original model runs based on the GPU server but I changed the model will be run based on the CPU. but it is it is a little bit slow
+
+Q
+And then are there any like data privacy concerns about loading DICOMs onto a website?
+-> Brent :  So, that's a big problem and that's one thing that we haven't worked our way through yet, Irene. that um like realistically Edward, we're not going to have this be able to be a internet based, right? It's going to have to be inhouse.
+It's and within our firewall and we haven't gotten to uploading patient files yet. So, he's working on a stock one.
+So, we're going to have to um we're going to have to load a whole bunch of patient data to see whether we can get Oh.
+-> Edward :  if there is a server in inside server inside the HSC, I can create it there.
+**** Check poing
+-> Brent : but we still have to we're waiting for Shanaz to see to show him how to upload um the PhD student. We're waiting for Shanaz to talk to Edward. Right, Edward? 
+****
+
+I was so there's a thing called federated learning in machine learning. Um it's a way to train AI models. it's not necessarily a way to use AI models, but in federated learning, it decentralizes the training.
+So the medical imaging data stays local but the weights get transferred and then smooshed into like a central location if that makes any sense.
+
+Q
+I was wondering if there was a way to use the lateral in conjunction with the anterior posterior X-rays to account for like just normal anatomy so that the predictions at least an have some sort of spatial relation if that makes any sense.
+
+Irene Explain
+Yeah. Yeah, because the thing is, so for instance, if you had a patient who has an AP X-ray and then they have a lateral X-ray, so they they have an X-ray in
+this way and they have an X-ray in this way. If you see variability in one direction, okay, you should be able to resolve the other
+directions X-ray um to match like each line of the lateral X-ray if that makes
+any sense because we have some idea of um like so so to do that I think you
+would need to measure the like average curvatures. So maybe the distance between the start of the scan to the curvature in the so for instance like if
+we're looking at a a spine in lateral view maybe you look at the lodosis and the kyphosis angle and you measure the distance between the edge of the image
+to the bone center and then use that distance to help you resolve the the the
+density so that it's not like just one density right now or or or a or a heat map that is kind of confusing maybe
+because it's Like if you just had enough bones stacked against each other, you'd just get a higher density which is also a little bit of like a confounder. Like
+so for instance, if I measured a thicker bone of a a lower density.
+Yeah. The problem is like the patient can be further and closer. They can you know like we don't there's a lot of variability that you know like the
+amount of pulse energy and all that like it's a that'sil.
+So but but like I guess what I guess what we do maybe on on like the like AI side is you control for the things that
+you at least can control for. So like we won't I don't think it would be like practically feasible to control for the
+milliampers per second the killer voltage peak and the distance across all centers because then we'd have be have to be speaking to all the radiology
+departments to get them to all change their imaging protocols.
+But we could we could control for imaging parameters. Yeah.
+And I think that would be a good next step as well at least on the engineering side.
+I don't know your thoughts.
+That's a whole level of complexity I hadn't even started going down. So I don't know that it's it sounds clever. I just I I haven't gone down that pathway, so I don't know.
+
+Irene Explain
+Um um do you think as is it would help with your FBA stuff or not?
+Not if it's there's no spatial resolution.
+That's what I kind of because the thing is like you could validate your algorithm against our FEA. like we could
+run an FBA and that could be a way for you to validate it. But if yours is a stacked measure, I would I I could do that. I could do something like measure
+the um well, so we would measure strain. So that's the other difference. We would
+measure strain and we would measure stress.
+We wouldn't measure density, but we could vary the density to understand what um
+would maybe be an explanation for the change in curvature of the spine or displacement in the spine or the stresses that the bone may be may be
+facing. But um because I was kind of thinking more along the line that you would do FEA and then a delta of some sort surgery and then you would be able to remodel the FEA and find out if it correlates to density changes over time, right?
+
+Brent Explain
+My brain was going down the pathway of um you would have spine patient has uh
+you know per xyz and um you punched in your fea and show the stress the strains
+on it right and then you have surgery which changes the alignment.
+So then you would enter that into your FBA and it would show how the strain is going to change.
+But you could do the X-rays and show with the density mapping show the changes in density and that if that
+correlates to the FEA change then you know that the model's working at some level and I know that's not that's a
+pretty gross way of looking at it but um yeah I mean I think that's pro that's that's probably true
+
+Irene Explain
+I think I agree with you that we would do, you know, you you take a like alignment a of a spine and then you do stress and strain and I
+would be able to give even slices through the model, but that's a spatial distribution of ...
+
+Brent Expalin
+I don't think we're going to be able to
+do the the X-ray the stacking. I just I think you're getting a whole level of challenge.
+Like I'm not sure we'll be able to figure out the stacking because I don't think anybody's ever been able to, right?
+
+Irene Explain
+So for instance um um we know how cameras work and an X-ray
+is kind of like a camera to some extent but not really. So
+I feel like if I just thought about it a little bit Yeah. I don't know. Bas
+I don't know what would that give you. So if you get a heat map that is like a stacked
+image say in lateral view.
+Yeah. the like the problem I think is that I just don't know like right now the heat map would just
+tell me amount of whiteness but white can be because there's just lots of bones stacked on top of each other or because the density is actually very
+high and those are theoretically the bone isn't going to change diameter
+it's not I don't
+I think it's going to be a bit challenging but not impossible. Yeah. Okay. Okay. Perfect. Perfect. Perfect. Okay.
+That's the best answer I can give you.
+
+Irene Explain
+Um, that is a good question.
+So, okay, let's just do a little bit of a thought experiment, right? If you had a patient who had scoliosis, for instance,
+and you put that X-ray of a scolotic patient in this tool right now, what do you
+like and and it's an a like say a lateral X-ray of a scolotic spine? What
+do you envision the results would give like from the heat mapping?
+
+Brent
+So my personal dream was to correlate it with Shenaz's work because you know how Shenaz did her CT scans pre-posttotal
+hip and showed um that uh bone density changed
+in the vertebrae. So I was thinking more along the line of delta curvature sorry pre-post total hip
+change in uh plum line change in lordosis with resultant change potentially in
+bone density and that would give me a signal to show that there is truly a mechanical difference that would correlate with patient satisfaction of some sort.
+
+*** Key point
+Irene
+Another question. Do you think there would be any of any of your patients there would be a situation
+where you could get an X-ray as well as a CT?
+
+Brent
+100%. But I need ethics and I need money. But yes.
+Okay. Because what people have also done um and this is basically we actually already have that right? We
+already have those patients with Shanaza study.
+Yeah. So if you have that data, yeah, we can do your idea.
+
+Irene
+Yes, you could take your CT scan, reconstruct it, orient the bone in the way the like stuff's telling you, and then but what would this heat map give you?
+Like um that would register your geometry to your X-ray. Yeah.
+And then Yeah, that's like gets you basically by plane foscopy. I could definitely do FEA on that. But what would this heat map give you?
+So the heat map gives you bone density in a gross sense
+I guess like changes in bone density in a gross sense like a projected form of that.
+
+
+Uh, I see a little spine. Yeah, I can see the curvature. Yeah. Yeah, I can see the curvature.
+So, I would expect um I'll color in the side that I expect the higher like strain and stresses.
+Yep. Yep. Yep. Yep. Yep. On the compression side basically.
+Right. So, what I'm expecting Edward's predictions to show me
+is like red where my simulation will come back like high on the stresses over there. But because it's a projection,
+that's the bit that just makes it a bit challenging.
+Like, so I think okay, so this is the thing, right? I think that Edwards
+um I I just I just don't Okay, so I guess I guess I question to some extent the validity of the current output which
+is the um like heat map but the algorithm already currently segments spine right vertebrae by vertebra.
+****
+
+
+
+=====================
+Brent : but we still have to we're waiting for Shanaz to see to show him how to upload um the PhD student. We're waiting for Shanaz to talk to Edward. Right, Edward? 
+Irene : Edward's predictions to show me is like red where my simulation will come back like high on the stresses over there. But because it's a projection,

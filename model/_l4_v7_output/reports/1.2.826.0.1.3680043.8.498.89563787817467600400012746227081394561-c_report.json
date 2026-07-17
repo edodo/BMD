@@ -1,0 +1,72 @@
+{
+  "schema_version": "bmd-report/1.0",
+  "study": "1.2.826.0.1.3680043.8.498.89563787817467600400012746227081394561-c.dcm",
+  "quality_control": {
+    "status": "FAIL",
+    "messages": [
+      "paraspinal soft-tissue reference unusable -> BAR cannot be formed",
+      "only 1 of L1-L4 measurable -> lumbar mean is weakly supported"
+    ]
+  },
+  "acquisition": {
+    "detector_response": "log",
+    "response_source": "default (no DICOM tag)",
+    "pixel_spacing_mm": 0.1
+  },
+  "primary_index": {
+    "name": "BAR",
+    "long_name": "Bone Attenuation Ratio",
+    "unit": "x soft-tissue attenuation (dimensionless)",
+    "value": null,
+    "z": null,
+    "percentile": null,
+    "category": null
+  },
+  "composite": {
+    "bhi": 30.549394931163214,
+    "bhi_z": -0.5086638027772037,
+    "scale": "0-100 cohort percentile"
+  },
+  "microarchitecture": {
+    "vario_slope": 1.4332748654096263,
+    "fractal_dim": 1.6365092472032086,
+    "glcm_contrast": 9.147420282124234,
+    "glcm_correlation": 0.9562583108100098,
+    "glcm_energy": 0.6758770377198561,
+    "glcm_homogeneity": 0.7971293648964958,
+    "glcm_entropy": 2.9255852130004674
+  },
+  "lumbar": {
+    "bar_L1L4_mean": null,
+    "bmd_L1L4_mean": 0.1620914787054062,
+    "n_vertebrae": 1,
+    "per_vertebra": {
+      "L1": null,
+      "L2": null,
+      "L3": null,
+      "L4": null
+    }
+  },
+  "legacy_indices": {
+    "bmd_trimmed": 0.1620914787054062,
+    "bmd_rel": 10.287464993475425,
+    "bmd_mean": 0.22216980159282684,
+    "bmd_median": 0.017540285363793373,
+    "soft_tissue_ref": 0.01575521193444729,
+    "air_ref": 0.014513421803712845
+  },
+  "precision": {
+    "lsc_pct": 96.76994645154731,
+    "note": "A follow-up change smaller than lsc_pct is measurement noise."
+  },
+  "reference": {
+    "name": "BUU/DICOM test cohort (n=42)",
+    "n": 38
+  },
+  "interpretation": [
+    "MEASUREMENT NOT VALID - do not interpret the numbers below.",
+    "  - paraspinal soft-tissue reference unusable -> BAR cannot be formed",
+    "  - only 1 of L1-L4 measurable -> lumbar mean is weakly supported"
+  ],
+  "disclaimer": "Cohort-relative radiographic proxy indices. NOT areal BMD (g/cm2) and NOT DXA T-scores. For research and methodological demonstration only."
+}

@@ -1,0 +1,72 @@
+{
+  "schema_version": "bmd-report/1.0",
+  "study": "1.2.826.0.1.3680043.8.498.44769667050882688681268288464245560275-c.dcm",
+  "quality_control": {
+    "status": "PASS",
+    "messages": []
+  },
+  "acquisition": {
+    "detector_response": "log",
+    "response_source": "default (no DICOM tag)",
+    "pixel_spacing_mm": 0.1
+  },
+  "primary_index": {
+    "name": "BAR",
+    "long_name": "Bone Attenuation Ratio",
+    "unit": "x soft-tissue attenuation (dimensionless)",
+    "value": 0.5554288281391284,
+    "z": -0.033139226413481646,
+    "percentile": 48.67817808811882,
+    "category": "Within reference range"
+  },
+  "composite": {
+    "bhi": 54.69790676854264,
+    "bhi_z": 0.11803255295880526,
+    "scale": "0-100 cohort percentile"
+  },
+  "microarchitecture": {
+    "vario_slope": 0.9997648951688878,
+    "fractal_dim": null,
+    "glcm_contrast": 1.894268418121477,
+    "glcm_correlation": 0.8284988486992106,
+    "glcm_energy": 0.17595553067853104,
+    "glcm_homogeneity": 0.6206346423661713,
+    "glcm_entropy": 5.4575175019344355
+  },
+  "lumbar": {
+    "bar_L1L4_mean": 0.5077127228222857,
+    "bmd_L1L4_mean": 0.8594388961791992,
+    "n_vertebrae": 4,
+    "per_vertebra": {
+      "L1": 0.08363634832065128,
+      "L2": 0.6872170281841574,
+      "L3": 0.7045686866452061,
+      "L4": 0.5554288281391284
+    }
+  },
+  "legacy_indices": {
+    "bmd_trimmed": 0.8182772397994995,
+    "bmd_rel": 1.1988785188892292,
+    "bmd_mean": 0.8148295879364014,
+    "bmd_median": 0.8199677467346191,
+    "soft_tissue_ref": 0.6825345754623413,
+    "air_ref": 0.4381420314311981
+  },
+  "precision": {
+    "lsc_pct": 96.76994645154731,
+    "note": "A follow-up change smaller than lsc_pct is measurement noise."
+  },
+  "reference": {
+    "name": "BUU/DICOM test cohort (n=42)",
+    "n": 38
+  },
+  "interpretation": [
+    "L4 trabecular bone absorbs 0.56x as much extra X-ray as the adjacent soft tissue.",
+    "That places this L4 at the 49th percentile of the reference cohort (Within reference range).",
+    "Bone Health Index (density + microarchitecture): 55/100.",
+    "Microarchitecture is within the cohort's usual range.",
+    "Lumbar (L1-L4) mean attenuation ratio = 0.51 across 4 vertebrae.",
+    "Cohort-relative proxy indices, not DXA T-scores or areal BMD (g/cm2)."
+  ],
+  "disclaimer": "Cohort-relative radiographic proxy indices. NOT areal BMD (g/cm2) and NOT DXA T-scores. For research and methodological demonstration only."
+}

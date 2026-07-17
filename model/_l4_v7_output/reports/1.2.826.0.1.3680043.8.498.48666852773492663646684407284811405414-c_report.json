@@ -1,0 +1,78 @@
+{
+  "schema_version": "bmd-report/1.0",
+  "study": "1.2.826.0.1.3680043.8.498.48666852773492663646684407284811405414-c.dcm",
+  "quality_control": {
+    "status": "WARN",
+    "messages": [
+      "10.8% of ROI pixels are clipped (over/under-exposed)",
+      "only 1 of L1-L4 measurable -> lumbar mean is weakly supported"
+    ]
+  },
+  "acquisition": {
+    "detector_response": "log",
+    "response_source": "default (no DICOM tag)",
+    "pixel_spacing_mm": 0.1
+  },
+  "primary_index": {
+    "name": "BAR",
+    "long_name": "Bone Attenuation Ratio",
+    "unit": "x soft-tissue attenuation (dimensionless)",
+    "value": 0.24589287876480537,
+    "z": -0.19191899348734415,
+    "percentile": 42.390282967264795,
+    "category": "Within reference range"
+  },
+  "composite": {
+    "bhi": 48.91260804405317,
+    "bhi_z": -0.027260250125977332,
+    "scale": "0-100 cohort percentile"
+  },
+  "microarchitecture": {
+    "vario_slope": 0.8596023788062398,
+    "fractal_dim": 1.8362126709857487,
+    "glcm_contrast": 3.2237123256860096,
+    "glcm_correlation": 0.7730488408249031,
+    "glcm_energy": 0.1895166112984435,
+    "glcm_homogeneity": 0.6079589027866703,
+    "glcm_entropy": 5.2680965074667565
+  },
+  "lumbar": {
+    "bar_L1L4_mean": 0.24589287876480537,
+    "bmd_L1L4_mean": 0.9281067252159119,
+    "n_vertebrae": 1,
+    "per_vertebra": {
+      "L1": null,
+      "L2": null,
+      "L3": null,
+      "L4": 0.24589287876480537
+    }
+  },
+  "legacy_indices": {
+    "bmd_trimmed": 0.9281067252159119,
+    "bmd_rel": 1.2439644243021362,
+    "bmd_mean": 0.9083775877952576,
+    "bmd_median": 0.9268102645874023,
+    "soft_tissue_ref": 0.746086835861206,
+    "air_ref": 0.00584624707698822
+  },
+  "precision": {
+    "lsc_pct": 96.76994645154731,
+    "note": "A follow-up change smaller than lsc_pct is measurement noise."
+  },
+  "reference": {
+    "name": "BUU/DICOM test cohort (n=42)",
+    "n": 38
+  },
+  "interpretation": [
+    "Measurement usable, with caveats:",
+    "  - 10.8% of ROI pixels are clipped (over/under-exposed)",
+    "  - only 1 of L1-L4 measurable -> lumbar mean is weakly supported",
+    "L4 trabecular bone absorbs 0.25x as much extra X-ray as the adjacent soft tissue.",
+    "That places this L4 at the 42th percentile of the reference cohort (Within reference range).",
+    "Bone Health Index (density + microarchitecture): 49/100.",
+    "Microarchitecture is within the cohort's usual range.",
+    "Lumbar (L1-L4) mean attenuation ratio = 0.25 across 1 vertebrae.",
+    "Cohort-relative proxy indices, not DXA T-scores or areal BMD (g/cm2)."
+  ],
+  "disclaimer": "Cohort-relative radiographic proxy indices. NOT areal BMD (g/cm2) and NOT DXA T-scores. For research and methodological demonstration only."
+}

@@ -1,0 +1,70 @@
+{
+  "schema_version": "bmd-report/1.0",
+  "study": "1.2.826.0.1.3680043.8.498.12209232711532162247608981043714969492-c.dcm",
+  "quality_control": {
+    "status": "FAIL",
+    "messages": [
+      "no L4 detected in this image"
+    ]
+  },
+  "acquisition": {
+    "detector_response": "log",
+    "response_source": "default (no DICOM tag)",
+    "pixel_spacing_mm": 0.1
+  },
+  "primary_index": {
+    "name": "BAR",
+    "long_name": "Bone Attenuation Ratio",
+    "unit": "x soft-tissue attenuation (dimensionless)",
+    "value": null,
+    "z": null,
+    "percentile": null,
+    "category": null
+  },
+  "composite": {
+    "bhi": null,
+    "bhi_z": null,
+    "scale": "0-100 cohort percentile"
+  },
+  "microarchitecture": {
+    "vario_slope": null,
+    "fractal_dim": null,
+    "glcm_contrast": null,
+    "glcm_correlation": null,
+    "glcm_energy": null,
+    "glcm_homogeneity": null,
+    "glcm_entropy": null
+  },
+  "lumbar": {
+    "bar_L1L4_mean": null,
+    "bmd_L1L4_mean": null,
+    "n_vertebrae": null,
+    "per_vertebra": {
+      "L1": null,
+      "L2": null,
+      "L3": null,
+      "L4": null
+    }
+  },
+  "legacy_indices": {
+    "bmd_trimmed": null,
+    "bmd_rel": null,
+    "bmd_mean": null,
+    "bmd_median": null,
+    "soft_tissue_ref": null,
+    "air_ref": null
+  },
+  "precision": {
+    "lsc_pct": 96.76994645154731,
+    "note": "A follow-up change smaller than lsc_pct is measurement noise."
+  },
+  "reference": {
+    "name": "BUU/DICOM test cohort (n=42)",
+    "n": 38
+  },
+  "interpretation": [
+    "MEASUREMENT NOT VALID - do not interpret the numbers below.",
+    "  - no L4 detected in this image"
+  ],
+  "disclaimer": "Cohort-relative radiographic proxy indices. NOT areal BMD (g/cm2) and NOT DXA T-scores. For research and methodological demonstration only."
+}

@@ -1,0 +1,72 @@
+{
+  "schema_version": "bmd-report/1.0",
+  "study": "1.2.826.0.1.3680043.8.498.16025804384837533255224060211228287365-c.dcm",
+  "quality_control": {
+    "status": "PASS",
+    "messages": []
+  },
+  "acquisition": {
+    "detector_response": "log",
+    "response_source": "default (no DICOM tag)",
+    "pixel_spacing_mm": 0.1
+  },
+  "primary_index": {
+    "name": "BAR",
+    "long_name": "Bone Attenuation Ratio",
+    "unit": "x soft-tissue attenuation (dimensionless)",
+    "value": 0.32885198325654774,
+    "z": -0.14936423590755218,
+    "percentile": 44.063311536556746,
+    "category": "Within reference range"
+  },
+  "composite": {
+    "bhi": 48.05385580373844,
+    "bhi_z": -0.04880196515559561,
+    "scale": "0-100 cohort percentile"
+  },
+  "microarchitecture": {
+    "vario_slope": 1.0668511610435167,
+    "fractal_dim": null,
+    "glcm_contrast": 5.3171210106383,
+    "glcm_correlation": 0.8192180053083247,
+    "glcm_energy": 0.21782804039609732,
+    "glcm_homogeneity": 0.6742584126445128,
+    "glcm_entropy": 4.989400841264403
+  },
+  "lumbar": {
+    "bar_L1L4_mean": 0.2907738755429842,
+    "bmd_L1L4_mean": 0.8127568811178207,
+    "n_vertebrae": 4,
+    "per_vertebra": {
+      "L1": 0.20394525494863286,
+      "L2": 0.2973466267321711,
+      "L3": 0.3329516372345849,
+      "L4": 0.32885198325654774
+    }
+  },
+  "legacy_indices": {
+    "bmd_trimmed": 0.7868264317512512,
+    "bmd_rel": 1.2054776014162747,
+    "bmd_mean": 0.7809359431266785,
+    "bmd_median": 0.7972164750099182,
+    "soft_tissue_ref": 0.6527082920074463,
+    "air_ref": 0.2448708862066269
+  },
+  "precision": {
+    "lsc_pct": 96.76994645154731,
+    "note": "A follow-up change smaller than lsc_pct is measurement noise."
+  },
+  "reference": {
+    "name": "BUU/DICOM test cohort (n=42)",
+    "n": 38
+  },
+  "interpretation": [
+    "L4 trabecular bone absorbs 0.33x as much extra X-ray as the adjacent soft tissue.",
+    "That places this L4 at the 44th percentile of the reference cohort (Within reference range).",
+    "Bone Health Index (density + microarchitecture): 48/100.",
+    "Microarchitecture: 'Trabecular pattern smoothness' is 1.1 SD below the cohort - the trabecular pattern looks degraded beyond what density alone shows.",
+    "Lumbar (L1-L4) mean attenuation ratio = 0.29 across 4 vertebrae.",
+    "Cohort-relative proxy indices, not DXA T-scores or areal BMD (g/cm2)."
+  ],
+  "disclaimer": "Cohort-relative radiographic proxy indices. NOT areal BMD (g/cm2) and NOT DXA T-scores. For research and methodological demonstration only."
+}
