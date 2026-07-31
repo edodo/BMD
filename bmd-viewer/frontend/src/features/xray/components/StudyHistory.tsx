@@ -75,7 +75,7 @@ export function StudyHistory({
         <input
           ref={fileRef}
           type="file"
-          accept=".dcm,application/dicom"
+          accept=".dcm,.dicom,application/dicom"
           hidden
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -85,6 +85,16 @@ export function StudyHistory({
         />
       </div>
       {upload.isPending && <p className="muted">Uploading…</p>}
+      {upload.isError && (
+        <p className="muted" style={{ color: "var(--danger, #d33)" }}>
+          Upload failed:{" "}
+          {(upload.error as any)?.response?.status === 413
+            ? "file too large (server limit)"
+            : (upload.error as any)?.response?.data?.detail ??
+              (upload.error as Error)?.message ??
+              "unknown error"}
+        </p>
+      )}
       <ul>
         {pageItems.map((s) => (
           <li

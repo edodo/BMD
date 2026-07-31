@@ -352,3 +352,58 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
 .study-note textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
 .note-actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
 .note-timestamp { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* ============================================================
+   Decorative "clinical glow" theme — CHROME ONLY.
+   Deliberately scoped to empty states, auth and headers. It must NEVER be
+   applied to a diagnostic image: recolouring an X-ray implies information the
+   attenuation data does not contain, and this app reports a bone-density
+   measurement. Keep radiographs grayscale.
+   ============================================================ */
+.glow-panel {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 15% 0%, #123a5e 0%, transparent 55%),
+    radial-gradient(100% 80% at 85% 100%, #0d2f4d 0%, transparent 60%),
+    #060b12;
+  color: #dbeafe;
+  border: 1px solid #17324d;
+  border-radius: 14px;
+}
+/* soft cyan bloom drifting behind the content */
+.glow-panel::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background:
+    radial-gradient(closest-side, rgba(56, 189, 248, 0.20), transparent 70%),
+    radial-gradient(closest-side, rgba(59, 130, 246, 0.16), transparent 70%);
+  background-position: 25% 30%, 75% 70%;
+  background-size: 55% 55%, 45% 45%;
+  background-repeat: no-repeat;
+  filter: blur(28px);
+  animation: glow-drift 16s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+.glow-panel > * { position: relative; z-index: 1; }
+
+@keyframes glow-drift {
+  from { transform: translate3d(-2%, -1%, 0) scale(1); }
+  to   { transform: translate3d(3%, 2%, 0) scale(1.06); }
+}
+
+.glow-title {
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  background: linear-gradient(92deg, #e0f2fe 10%, #38bdf8 55%, #818cf8 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.glow-sub { color: #93b4d4; font-size: 13px; }
+
+/* Respect users who disable motion (vestibular safety, and it is a medical app). */
+@media (prefers-reduced-motion: reduce) {
+  .glow-panel::before { animation: none; }
+}

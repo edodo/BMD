@@ -1,8 +1,8 @@
 // 종적 대조(Side-by-Side Longitudinal) 뷰.
 // 왼쪽 리스트에서 기준(수술 전) 1건, 오른쪽 리스트에서 비교(수술 후) 여러 건을
 // 고르면, 중앙에 각 검사의 Extracted L4 + Density basis가 좌우로 나란히 정렬된다.
-// '대조 모드'에서는 post−pre 정규화 밀도 격자를 비교해 골손실(음의 차이) 부위를
-// 붉은 격자로 플롯한다.
+// '대조 모드'에서는 post−pre 정규화 밀도 격자를 비교해
+// 밀도 감소 부위는 파란 격자, 증가 부위는 붉은 격자로 플롯한다.
 import { useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useStudies } from "@/features/patients/api/queries";
@@ -22,7 +22,7 @@ function shortDate(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString("en-CA");
 }
 
-// post−pre 밀도 격자 → 골손실(음의 차이) 붉은 격자 오버레이
+// post−pre 밀도 격자 → 감소(파랑)/증가(빨강) 격자 오버레이
 function BoneLossGrid({
   pre,
   post,
@@ -34,22 +34,30 @@ function BoneLossGrid({
   const n = post.length;
   const cells: JSX.Element[] = [];
   let lossCells = 0;
+  let gainCells = 0;
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {
       const p = pre[i]?.[j];
       const q = post[i]?.[j];
       const d = p != null && q != null ? q - p : null;
       const loss = d != null && d < -config.compareBoneLossDelta;
+      const gain = d != null && d > config.compareBoneLossDelta;
       if (loss) lossCells++;
-      const alpha = loss ? Math.min(0.75, 0.25 + Math.abs(d!) * 1.5) : 0;
+      if (gain) gainCells++;
+      const alpha =
+        loss || gain ? Math.min(0.75, 0.25 + Math.abs(d!) * 1.5) : 0;
+      const color = loss
+        ? `rgba(37,99,235,${alpha})` // 밀도 감소 → 파랑
+        : gain
+          ? `rgba(220,38,38,${alpha})` // 밀도 증가 → 빨강
+          : "transparent";
+      const line = loss
+        ? "1px solid rgba(37,99,235,0.45)"
+        : gain
+          ? "1px solid rgba(220,38,38,0.45)"
+          : "none";
       cells.push(
-        <span
-          key={`${i}-${j}`}
-          style={{
-            background: loss ? `rgba(220,38,38,${alpha})` : "transparent",
-            outline: loss ? "1px solid rgba(220,38,38,0.45)" : "none",
-          }}
-        />
+        <span key={`${i}-${j}`} style={{ background: color, outline: line }} />
       );
     }
   }
@@ -65,8 +73,8 @@ function BoneLossGrid({
         {cells}
       </div>
       <p className="bone-loss-cap">
-        Bone-loss map vs pre-op — {lossCells}/{n * n} regions below −
-        {config.compareBoneLossDelta}
+        Density change vs pre-op — ↓ {lossCells} (blue) / ↑ {gainCells} (red)
+        of {n * n} regions (|Δ| &gt; {config.compareBoneLossDelta})
       </p>
     </div>
   );
@@ -172,7 +180,7 @@ export function CompareView({ patientId }: { patientId: string }) {
             checked={contrast}
             onChange={(e) => setContrast(e.target.checked)}
           />
-          Contrast mode (bone-loss grid)
+          Contrast mode (density-change grid)
         </label>
       </div>
 

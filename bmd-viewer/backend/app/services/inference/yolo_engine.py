@@ -101,7 +101,9 @@ class _YoloEigenCAM:
 class YoloBmdEngine(BmdInferenceEngine):
     """YOLOv8-seg 기반 L1~L5 분할 + L4 proxy BMD 산출 엔진."""
 
-    MODEL_VERSION = "yolo26m-seg-l1l5-ap-la-2.0"
+    # v17: 주 지표가 BAR(배경 대비 상대 감쇠)로 바뀌어 이전 0..1 점수와 스케일이
+    # 호환되지 않는다. 버전을 올려 과거 레코드와 구분하고, 기존 스터디는 재추론한다.
+    MODEL_VERSION = "yolo26m-seg-l1l5-ap-la-3.0-bar"
 
     def __init__(self, weights_path: Path | None = None) -> None:
         self._weights = weights_path or (
@@ -273,9 +275,11 @@ class YoloBmdEngine(BmdInferenceEngine):
         cx1, cy1, cx2, cy2 = box
         crop_rgb = rgb[cy1:cy2, cx1:cx2]
         crop_cam = cam_full[cy1:cy2, cx1:cx2]
-        crop_cam = (crop_cam - crop_cam.min()) / (
-            crop_cam.max() - crop_cam.min() + 1e-6
-        )
+        # 크롭 안에서 다시 min-max 정규화하면 안 된다. L4 내부 주목도가 평탄할 때
+        # 미세 노이즈가 전체 스케일로 증폭돼, 인접 척추/피질 경계가 걸린 크롭
+        # 모서리가 '가장 뜨거운 근거'처럼 보이는 착시가 생긴다(실제 관측된 버그).
+        # cam은 이미 전체 이미지 기준 0..1이므로 그 스케일을 그대로 쓴다.
+        crop_cam = np.clip(crop_cam, 0.0, 1.0)
         crop_heat = cv2.cvtColor(
             cv2.applyColorMap((crop_cam * 255).astype(np.uint8), cv2.COLORMAP_JET),
             cv2.COLOR_BGR2RGB,
@@ -421,9 +425,187 @@ class YoloBmdEngine(BmdInferenceEngine):
 
     @staticmethod
     def _bmd_score(mean_dens: float, low: float, high: float) -> float:
-        """L4 ROI 평균 감쇠를 [low, high] → 0..1 proxy BMD 점수로 사상."""
+        """[레거시 v16 이전] L4 ROI 평균 감쇠를 [low, high] → 0..1 점수로 사상.
+
+        v17부터 주 지표는 _bar_score(BAR)이며, 이 함수는 BAR 산출이 QC로 실패했을
+        때의 폴백으로만 쓰인다. 두 산식은 스케일이 다르므로 값을 섞어 추세를
+        그리면 안 된다(폴백 시 reliability_warning으로 표시).
+        """
         score = (mean_dens - low) / (high - low)
         return round(float(np.clip(score, 0.0, 1.0)), 3)
+
+    # ---------- v17: BAR (노트북 L4_AP_segmentation_v17과 동일 산식) ----------
+    DEFAULT_RESPONSE = "log"      # DICOM 태그가 없을 때 (processed CR/DX 관례)
+    QC_MIN_SOFT_MARGIN = 0.02     # A_soft - A_air 가 이보다 작으면 기준값 사용 불가
+    # QC 게이트 (노트북 v17과 동일 취지)
+    # 연부조직 기준값 분위수. 링 오염은 단측(감쇠를 더하기만) 이므로 하위 분위수가
+    # 강건 추정량이다. 25 = 링의 하위 1/4이 순수 연부조직이라고 보는 보수적 설정.
+    SOFT_TISSUE_PCT = 25
+    QC_MAX_ROI_SATURATED = 0.02   # ROI의 2% 초과가 클리핑 -> 측정 신뢰 불가
+    QC_MIN_ROI_PX = 300           # 해면골 ROI가 이보다 작으면 불안정
+
+    # 노트북 v17 Step 3a 상수 (trabecular_roi)
+    ERODE_FRAC = 0.10      # 침식 커널 = 척추체 높이의 10% (피질골 테두리 제거)
+    ENDPLATE_FRAC = 0.18   # 상/하 종판 밴드를 각각 18%씩 제거
+
+    @classmethod
+    def _trabecular_roi(cls, mask: np.ndarray) -> np.ndarray:
+        """중앙 해면골 ROI — 노트북 v17 trabecular_roi와 동일.
+
+        (1) 치밀한 피질골 테두리를 침식으로 제거하고, (2) 가장 밝고 오염이 심한
+        상/하 종판 밴드를 잘라낸다. 남는 것은 순수 해면골(피질·종판·투영 경계 없음).
+        침식이 과해 남는 게 없으면 원본 마스크를 그대로 돌려준다.
+
+        입력은 shrink 적용 전 '전체 L4 마스크'여야 한다(이중 축소 방지).
+        """
+        m = (mask > 0).astype(np.uint8)
+        ys, xs = np.where(m)
+        if len(xs) == 0:
+            return mask
+        y0, y1 = int(ys.min()), int(ys.max())
+        h = y1 - y0 + 1
+        k = max(3, int(round(cls.ERODE_FRAC * h)))
+        er = cv2.erode(m, np.ones((k, k), np.uint8))
+        cut = int(round(cls.ENDPLATE_FRAC * h))
+        er[: y0 + cut] = 0
+        er[y1 - cut + 1 :] = 0
+        if er.sum() < 10:          # 너무 공격적 -> 안전 폴백
+            return mask
+        return er
+
+    @staticmethod
+    def _gray_lin(dens: np.ndarray) -> np.ndarray:
+        """노트북 load_xray와 동일한 0.5/99.5 percentile 윈도우 [0,1] (뼈 밝음).
+
+        dens는 이미 MONOCHROME1 보정이 끝난 선형 배열이므로, 노트북의 gray_lin과
+        정확히 같은 값이 나온다(동일 윈도우, 동일 방향).
+        """
+        lo, hi = np.percentile(dens, 0.5), np.percentile(dens, 99.5)
+        if hi <= lo:
+            lo, hi = float(dens.min()), float(dens.max()) + 1e-6
+        return np.clip((dens - lo) / (hi - lo), 0, 1).astype(np.float32)
+
+    @classmethod
+    def _detector_response(cls, path: Path) -> str:
+        """DICOM PixelIntensityRelationship(LIN/LOG) → 감쇠 매핑 선택 (헤더만 읽음)."""
+        try:
+            import pydicom
+
+            ds = pydicom.dcmread(str(path), stop_before_pixels=True)
+            pir = str(getattr(ds, "PixelIntensityRelationship", "")).strip().upper()
+            if pir == "LIN":
+                return "linear"
+            if pir == "LOG":
+                return "log"
+        except Exception:  # noqa: BLE001 - 헤더 불량 시 기본값으로 진행
+            pass
+        return cls.DEFAULT_RESPONSE
+
+    @staticmethod
+    def _to_attenuation(gray: np.ndarray, response: str) -> np.ndarray:
+        """[0,1] '뼈 밝음' 영상 → 감쇠 비례 도메인.
+
+        log    : 저장값이 이미 mu*t에 아핀 → A = I
+        linear : 저장값이 투과 강도에 비례 → Beer-Lambert로 A = -ln(1 - I)
+        둘 다 감쇠에 대해 단조증가이므로 '밝다 = 밀도 높다'가 유지된다.
+        """
+        if response == "log":
+            return np.asarray(gray, np.float32)
+        g = np.clip(np.asarray(gray, np.float32), 0.0, 1.0 - 1e-4)
+        return (-np.log1p(-g)).astype(np.float32)
+
+    @staticmethod
+    def _trimmed_mean(v: np.ndarray, lo: int = 10, hi: int = 90) -> float | None:
+        """중앙 80% 평균 — 잔여 종판/혈관 그림자/핫픽셀에 둔감."""
+        if v.size == 0:
+            return None
+        a, b = np.percentile(v, [lo, hi])
+        core = v[(v >= a) & (v <= b)]
+        return float(core.mean()) if core.size else float(v.mean())
+
+    @classmethod
+    def _air_reference(cls, gray: np.ndarray) -> float:
+        """직접노출(비감쇠) 배경 레벨. Otsu로 배경을 분리한 뒤 25 percentile.
+
+        조준(collimation) 테두리나 산란 연부조직이 값을 끌어올리지 못하게 25pct를
+        쓰고, 배경이 거의 없는 협착 조준 영상에서는 전체 1 percentile로 폴백한다.
+        """
+        u8 = (np.clip(gray, 0, 1) * 255).astype(np.uint8)
+        thr, _ = cv2.threshold(u8, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        bg = gray[u8 < thr]
+        if bg.size < 0.005 * gray.size:
+            return float(np.percentile(gray, 1))
+        return float(np.percentile(bg, 25))
+
+    @classmethod
+    def _bar_score(cls, gray_lin, roi_mask, valid, l4_box, bone_dil, response):
+        """BAR = (A_trab - A_soft) / (A_soft - A_air) — 노트북 v17과 동일.
+
+        분자·분모가 모두 '차이'이므로 감쇠의 아핀 변환 A -> a*A + b (노출/게인/
+        윈도우레벨 변화)에 대해 불변이다. 읽는 법: 'L4 해면골은 주변 연부조직보다
+        BAR배 더 많은 추가 감쇠를 만든다'.
+
+        반환 (bar | None, parts). parts에는 게이지/격자용 bar_map과 a_soft/a_air/
+        margin이 담긴다. 연부조직 기준값이 없거나 soft-air 마진이 QC 미만이면
+        bar=None → 호출부에서 레거시 점수로 폴백한다.
+        """
+        cx1, cy1, cx2, cy2 = l4_box
+        window = np.zeros(gray_lin.shape, dtype=bool)
+        window[cy1:cy2, cx1:cx2] = True
+        soft = valid & window & (bone_dil == 0)
+
+        # ---- 연부조직 기준값: 국소 링의 '하위 분위수' (v17.2) ----
+        # `soft`는 이미 L4 주변 창에서 검출된 모든 척추체를 뺀 국소 링이다. 문제는
+        # 이 링에 무엇이 섞이느냐가 아니라 '어떤 통계량을 쓰느냐'였다.
+        #
+        # 핵심: 링에 섞이는 오염(후방구조물/늑골/장골/횡돌기)은 언제나 감쇠를
+        # **더하는** 방향이다. 빼는 오염은 존재하지 않는다. 편향이 한쪽뿐이므로
+        # 중앙값은 옳은 추정량이 아니다 — 중앙값은 '오염 < 50%'를 가정하는데
+        # 측면상에서는 그 가정이 깨진다(실측: 25장 중 2장에서 a_soft > a_trab,
+        # 즉 뼈가 주변 연부조직보다 덜 흡수한다는 물리적으로 불가능한 결과).
+        #
+        # 단측 오염 하에서는 **하위 분위수**가 순수 연부조직의 강건 추정량이다.
+        # 이 방식은 좌/우 밴드 기하도, 촬영 뷰도, 환자 방향도 가정하지 않는다.
+        soft_vals = gray_lin[soft]
+        if soft_vals.size >= 50:
+            ref = float(np.percentile(soft_vals, cls.SOFT_TISSUE_PCT))
+        else:
+            body = gray_lin[valid]
+            if body.size == 0:
+                return None, {}
+            ref = float(np.percentile(body, cls.SOFT_TISSUE_PCT))
+
+        air_gray = cls._air_reference(gray_lin)
+        A = cls._to_attenuation(gray_lin, response)
+        a_soft = float(cls._to_attenuation(np.array([[ref]], np.float32), response)[0, 0])
+        a_air = float(cls._to_attenuation(np.array([[air_gray]], np.float32), response)[0, 0])
+        margin = a_soft - a_air
+        if margin <= cls.QC_MIN_SOFT_MARGIN:
+            return None, {"a_soft": a_soft, "a_air": a_air, "margin": float(margin)}
+
+        # ROI에서도 금속(인공관절)·배경을 제외한다. 레거시 경로(vals = dens[(mask>0) & valid])
+        # 와 동일한 규칙. 제외 후 남는 픽셀이 없으면 원본 ROI로 폴백한다.
+        roi_sel = (roi_mask > 0) & valid
+        if not roi_sel.any():
+            roi_sel = roi_mask > 0
+        a_trab = cls._trimmed_mean(A[roi_sel])
+        if a_trab is None:
+            return None, {}
+        bar = float((a_trab - a_soft) / margin)
+        bar_map = ((A - a_soft) / margin).astype(np.float32)
+        # 게이지 스케일: 0 = 연부조직, high = 유효 조직 99pct(치밀골 수준)
+        gauge_high = (
+            float(np.percentile(bar_map[valid], 99)) if valid.any()
+            else float(bar_map[roi_mask > 0].max())
+        )
+        return round(bar, 3), {
+            "bar_map": bar_map,
+            "a_soft": a_soft,
+            "a_air": a_air,
+            "margin": float(margin),
+            "gauge_low": 0.0,
+            "gauge_high": max(gauge_high, bar + 1e-3),
+        }
 
     @classmethod
     def _draw_detection_overlay(cls, rgb, masks_xy, classes, boxes, W, H, l4_i=None):
@@ -602,17 +784,81 @@ class YoloBmdEngine(BmdInferenceEngine):
         std_d = float(vals.std())
         p10 = float(np.percentile(vals, 10))
         p90 = float(np.percentile(vals, 90))
-        # low = L4 인접 국소 연부조직, high = 유효 조직 99pct (배경·금속 제외).
         # 뼈 경계가 연부조직에 새지 않도록 뼈 영역을 살짝 팽창시켜 사용.
         bone_dil = cv2.dilate(bone_union, np.ones((7, 7), np.uint8), 1)
-        low_anchor, high_anchor = self._density_scale(
-            dens, valid, self._crop_box(H, W, boxes[l4_i], pad=0.6), bone_dil,
-            vals,
+        l4_window = self._crop_box(H, W, boxes[l4_i], pad=0.6)
+
+        # ---- v17: 주 지표를 BAR로 교체 (노트북 L4_AP_segmentation_v17과 동일) ----
+        # 배경(연부조직) 대비 상대 감쇠로 정규화 -> 노출/게인/윈도우레벨 불변.
+        gray_lin = self._gray_lin(dens)
+        response = self._detector_response(dicom_path)
+        # 노트북과 동일한 ROI를 쓰기 위해 '전체 L4 마스크'에서 해면골 ROI를 새로 만든다.
+        # (run()의 `mask`는 이미 bmd_roi_shrink가 적용돼 있어 그대로 쓰면 이중 축소)
+        full_l4 = self._poly_to_mask(r.masks.xy[l4_i], H, W, shrink=1.0)
+        trab_roi = self._trabecular_roi(full_l4)
+
+        # ---- QC: 측정을 못 믿을 조건을 '객관적으로 측정 가능한 것'만으로 판정 ----
+        # 금속 자체는 신뢰성 있게 검출하지 못한다(밝기·형태 휴리스틱 모두 실측에서
+        # 실패). 그래서 '금속이 있다'가 아니라 'ROI가 포화됐다 = 값이 잘렸다'를 본다.
+        # 인공물이든 과노출이든, 클리핑된 픽셀 위에서 계산한 밀도는 신뢰할 수 없다.
+        qc_msgs: list[str] = []
+        roi_raw = dens[trab_roi > 0]
+        if roi_raw.size:
+            dmax = float(dens.max())
+            roi_sat = float((roi_raw >= 0.999 * dmax).mean())
+            if roi_sat > self.QC_MAX_ROI_SATURATED:
+                qc_msgs.append(
+                    f"L4 ROI의 {roi_sat*100:.1f}%가 포화(클리핑)됨 — 금속 인공물 또는 "
+                    f"과노출 가능성. 밀도값이 실제보다 낮게 잘렸을 수 있음."
+                )
+        if roi_raw.size < self.QC_MIN_ROI_PX:
+            qc_msgs.append(
+                f"L4 해면골 ROI가 너무 작음({roi_raw.size}px) — 측정이 불안정할 수 있음."
+            )
+        bar, bar_parts = self._bar_score(
+            gray_lin, trab_roi, valid, l4_window, bone_dil, response
         )
-        bmd_value = self._bmd_score(mean_d, low_anchor, high_anchor)
+        bar_fallback = bar is None
+        # 밀도 히트맵/격자는 '원시 감쇠(dens)' 픽셀을 색칠한다. 따라서 스케일 앵커도
+        # 반드시 같은 원시 도메인이어야 한다. BAR 단위(0~0.4)를 넣으면 raw 값(수천)이
+        # 상한을 수천 배 초과해 ROI 전체가 최대색으로 포화된다(v17 초기 버그).
+        # -> bmd_value만 BAR로 바꾸고, 시각화 스케일은 기존 원시 도메인을 유지한다.
+        low_anchor, high_anchor = self._density_scale(
+            dens, valid, l4_window, bone_dil, vals,
+        )
+        grid_src = dens
+        if not bar_fallback:
+            bmd_value = bar
+        else:
+            # BAR 실패(연부조직 기준값/soft-air 마진 불량) -> 레거시 0..1 점수로 폴백.
+            # 스케일이 다르므로 추세에 섞이지 않도록 아래에서 경고를 남긴다.
+            logger.warning(
+                "BAR 산출 실패(margin=%s) -> 레거시 점수 폴백: %s",
+                bar_parts.get("margin"), dicom_path.name,
+            )
+            bmd_value = self._bmd_score(mean_d, low_anchor, high_anchor)
+        # 게이지 마커는 low_anchor~high_anchor(원시 도메인) 위의 위치여야 한다.
+        # BAR(0.1 수준)을 여기 넣으면 스케일 맨 아래에 붙어 'Mean: 0'으로 표시된다.
+        roi_marker = round(mean_d, 1)
+
+        # ---- QC 판정을 신뢰도에 반영 ----
+        # (_reliability()는 이 위에서 이미 실행됐으므로 여기서 결과만 덧붙인다)
+        if bar_fallback:
+            # 스케일이 다른 두 산식이 한 추세선에 섞이면 임상적으로 오해를 부른다.
+            qc_msgs.append(
+                "BAR 산출 실패로 레거시 0..1 점수 사용 — BAR 기반 값과 추세를 섞지 마세요."
+            )
+        if qc_msgs:
+            # 값은 그대로 두되(임상의가 원본을 볼 수 있어야 한다) 신뢰도만 낮춘다.
+            joined = " / ".join(qc_msgs)
+            reliability_warning = (
+                f"{reliability_warning} / {joined}" if reliability_warning else joined
+            )
+            reliable = False
+            logger.info("QC 경고 (%s): %s", dicom_path.name, joined)
         # 종적 대조용 L4 밀도 격자 (post−pre로 골손실 부위 검출)
         density_grid = self._density_grid(
-            dens, mask, valid, low_anchor, high_anchor, settings.bmd_diff_grid_n
+            grid_src, mask, valid, low_anchor, high_anchor, settings.bmd_diff_grid_n
         )
 
         # Overlay: draw the actual segmentation polygon outline for every
@@ -770,7 +1016,7 @@ class YoloBmdEngine(BmdInferenceEngine):
             # 밀도 히트맵 스케일 (파랑 끝 / 빨강 끝 / L4 평균)
             density_low=round(low_anchor, 1),
             density_high=round(high_anchor, 1),
-            roi_mean_attenuation=round(mean_d, 1),
+            roi_mean_attenuation=roi_marker,
             l4_density_grid=density_grid,
             reliable=reliable,
             reliability_warning=reliability_warning,
