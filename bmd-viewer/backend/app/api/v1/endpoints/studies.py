@@ -26,8 +26,14 @@ from app.models import (
     StudyStatus,
     XrayStudy,
 )
-from app.schemas import StudyNoteUpdate, XrayStudyDetail, XrayStudyListItem
-from app.workers.inference_worker import process_study
+from app.schemas import (
+    StudyNoteUpdate,
+    ViewOverrideIn,
+    XrayStudyDetail,
+    XrayStudyListItem,
+)
+from app.services.inference.engine import PartialInferenceError
+from app.workers.inference_worker import process_study, recompute_view
 
 router = APIRouter()
 
@@ -167,6 +173,48 @@ async def update_study_note(
     study.note_updated_at = datetime.now(timezone.utc)
     await db.commit()
     # 상세 재조회 (관계 포함)
+    study = await db.scalar(
+        select(XrayStudy)
+        .where(XrayStudy.id == study_id)
+        .options(
+            selectinload(XrayStudy.measurement).selectinload(
+                BmdMeasurement.segments
+            ),
+            selectinload(XrayStudy.measurement).selectinload(
+                BmdMeasurement.xai_factors
+            ),
+        )
+    )
+    return study
+
+
+@router.post("/studies/{study_id}/view", response_model=XrayStudyDetail)
+async def override_view(
+    study_id: str,
+    payload: ViewOverrideIn,
+    doctor: Doctor = Depends(get_current_doctor),
+    db: AsyncSession = Depends(get_db),
+):
+    """의사가 AP/LA를 수동 지정 -> 그 뷰로 즉시 재계산 (v18_spec.md Sec.4.5).
+
+    자동판별(DICOM ViewPosition 태그, 없으면 AP 기본)이 실제 촬영 방향과
+    다를 때 화면에서 바로잡는다. 동기 요청 — 재추론 1건이라 몇 초 내 끝난다.
+    """
+    study = await db.get(XrayStudy, study_id)
+    if not study:
+        raise HTTPException(status_code=404, detail="Study not found")
+    await _assert_owns_patient(db, doctor, study.patient_id)
+    if study.status != StudyStatus.COMPLETED:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Study is not completed yet (status={study.status.value}).",
+        )
+
+    try:
+        await recompute_view(db, study, payload.view)
+    except PartialInferenceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     study = await db.scalar(
         select(XrayStudy)
         .where(XrayStudy.id == study_id)

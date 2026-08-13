@@ -11,11 +11,15 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useBmdTrend } from "@/features/patients/api/queries";
+import {
+  useBmdTrend,
+  useCalibratePrecision,
+} from "@/features/patients/api/queries";
 import { config } from "@/lib/config";
 
 export function BmdTrendChart({ patientId }: { patientId: string }) {
   const { data } = useBmdTrend(patientId);
+  const calibrate = useCalibratePrecision();
   if (!data || data.points.length === 0) {
     return <div className="trend empty">No measurement data yet.</div>;
   }
@@ -26,13 +30,17 @@ export function BmdTrendChart({ patientId }: { patientId: string }) {
     t: p.t_score,
   }));
 
-  // 직전 검사 대비 마지막 검사의 급격한 하락 감지 (단기 골손실 경고)
+  // 직전 검사 대비 마지막 검사의 급격한 하락 감지 (단기 골손실 경고).
+  // 임계값은 실측 LSC%(재위치 노이즈의 95% 신뢰한계)가 있으면 그것을,
+  // 아직 보정하지 않았으면 미검증 기본값(config.significantLossPct)을 쓴다.
+  const calibrated = data.lsc_percent != null;
+  const threshold = data.lsc_percent ?? config.significantLossPct;
   const n = chartData.length;
   const last = chartData[n - 1];
   const prev = n >= 2 ? chartData[n - 2] : null;
   const stepDropPct =
     prev && prev.bmd > 0 ? ((prev.bmd - last.bmd) / prev.bmd) * 100 : 0;
-  const alert = stepDropPct >= config.significantLossPct;
+  const alert = stepDropPct >= threshold;
 
   return (
     <div className={`trend${alert ? " alert" : ""}`}>
@@ -50,6 +58,34 @@ export function BmdTrendChart({ patientId }: { patientId: string }) {
         )}
       </div>
 
+      <div className="trend-precision">
+        {calibrated ? (
+          <span className="precision-status calibrated">
+            LSC {data.lsc_percent!.toFixed(1)}% (measured, calibrated{" "}
+            {new Date(data.lsc_calibrated_at!).toLocaleDateString("en-CA")})
+          </span>
+        ) : (
+          <span className="precision-status uncalibrated">
+            LSC not yet calibrated — using unverified default (
+            {config.significantLossPct}%)
+          </span>
+        )}
+        <button
+          type="button"
+          className="calibrate-btn"
+          onClick={() => calibrate.mutate()}
+          disabled={calibrate.isPending}
+        >
+          {calibrate.isPending ? "Calibrating…" : "Calibrate precision"}
+        </button>
+        {calibrate.isError && (
+          <span className="precision-error">
+            {(calibrate.error as any)?.response?.data?.detail ??
+              "Calibration failed."}
+          </span>
+        )}
+      </div>
+
       {alert && (
         <div className="trend-alert" role="alert">
           <span className="flag" aria-hidden="true">
@@ -57,7 +93,8 @@ export function BmdTrendChart({ patientId }: { patientId: string }) {
           </span>
           <span>
             <b>Significant Bone Loss</b> — {stepDropPct.toFixed(1)}% drop since
-            the previous exam (≥ {config.significantLossPct}%).
+            the previous exam (≥ {threshold.toFixed(1)}%
+            {calibrated ? " LSC" : ""}).
           </span>
         </div>
       )}

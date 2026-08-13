@@ -123,6 +123,8 @@ async def main(apply: bool, only_legacy: bool) -> None:
                     m.gradcam_path = res.gradcam_path
                 if res.l4_crop_path:
                     m.l4_crop_path = res.l4_crop_path
+                if res.xai_bar_l1l5_path:
+                    m.xai_bar_l1l5_path = res.xai_bar_l1l5_path
             ok += 1
 
         if apply:

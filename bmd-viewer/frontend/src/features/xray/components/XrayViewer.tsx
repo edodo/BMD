@@ -2,7 +2,10 @@
 import { useStudy } from "@/features/patients/api/queries";
 import { getDataProvider } from "@/lib/data";
 import { XaiPanel } from "@/features/bmd/components/XaiPanel";
+import { VertebraPanel } from "@/features/bmd/components/VertebraPanel";
 import { DensityBasis } from "@/features/bmd/components/DensityBasis";
+import { ViewSelector } from "@/features/bmd/components/ViewSelector";
+import { BhiChip } from "@/features/bmd/components/BhiChip";
 import { StudyNote } from "./StudyNote";
 
 const dp = getDataProvider();
@@ -93,6 +96,7 @@ export function XrayViewer({ studyId }: { studyId: string }) {
   const l4Crop = dp.assetUrl(m?.l4_crop_path ?? null);
   const xaiDensity = dp.assetUrl(m?.xai_overlay_path ?? null);
   const xaiCam = dp.assetUrl(m?.xai_l4_cam_path ?? null);
+  const xaiBarL1L5 = dp.assetUrl(m?.xai_bar_l1l5_path ?? null);
 
   // Parse DICOM metadata JSON (stored as string)
   let meta: Record<string, unknown> = {};
@@ -155,9 +159,6 @@ export function XrayViewer({ studyId }: { studyId: string }) {
           {xaiDensity && (
             <DensityBasis
               densityUrl={`${xaiDensity}?v=${study.id}`}
-              densityLow={m?.density_low}
-              densityHigh={m?.density_high}
-              roiMean={m?.roi_mean_intensity}
               bmdValue={m?.bmd_value}
             />
           )}
@@ -193,11 +194,21 @@ export function XrayViewer({ studyId }: { studyId: string }) {
                 <span className="tscore">T-score {m.t_score.toFixed(2)}</span>
               )}
             </div>
+            <BhiChip segments={m.segments} />
             <div className="bmd-meta">
               <span>Confidence {((m.confidence ?? 0) * 100).toFixed(0)}%</span>
               <span>Model {m.model_version}</span>
               {m.exposure_corrected && <span>Exposure corrected</span>}
             </div>
+            <ViewSelector
+              studyId={study.id}
+              viewPosition={study.view_position}
+              viewSource={study.view_source}
+            />
+            <VertebraPanel
+              segments={m.segments}
+              barMapUrl={xaiBarL1L5 ? `${xaiBarL1L5}?v=${study.id}` : null}
+            />
             <XaiPanel
               factors={m.xai_factors}
               camUrl={xaiCam ? `${xaiCam}?v=${study.id}` : null}

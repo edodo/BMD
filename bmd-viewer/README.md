@@ -35,3 +35,6 @@ YOLOv8-seg(`ml_models/l1_l5_seg.pt`)로 L1~L5를 분할하고, L4 중앙
 
 GPU(RTX 5060) 사용 시 `BMD_INFERENCE_DEVICE=cuda`와 CUDA용 torch를 설치하세요.
 모델 없이 배선만 테스트하려면 `BMD_INFERENCE_ENGINE=stub`.
+
+## 배경 확인
+(bmd) PS C:\Users\csm02\Desktop\edward\bmd\src\BMD\bmd-viewer\backend> python scripts/debug_air_reference.py "C:\Users\csm02\Desktop\edward\class\Capstone Project INFO-6156\SourceCode\BuddyCheckAI\App\Backend\dcmfiles\lateral\50e75f80d4aa28ffbc75ed4770a5ec50.dicom" out1.png

@@ -6,6 +6,7 @@ ORM 모델과 분리하여 API 계약을 명시적으로 관리한다.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -86,6 +87,26 @@ class VertebraSegmentOut(ORMBase):
     bbox_h: float
     mask_path: str | None
     mean_intensity: float | None
+    # v2: 모든 검출 척추(L1~L5)에 대해 산출 (예전엔 target(L4)만 BAR를 가졌음).
+    bar: float | None = None
+    qc_status: str | None = None
+    qc_message: str | None = None
+    # v3: 골소주 미세구조 텍스처 + AE 이상점수 (v18_spec.md Sec.5/C9).
+    glcm_contrast: float | None = None
+    glcm_correlation: float | None = None
+    glcm_energy: float | None = None
+    glcm_homogeneity: float | None = None
+    glcm_entropy: float | None = None
+    vario_slope: float | None = None
+    fractal_dim: float | None = None
+    anomaly_mse: float | None = None
+    anomaly_pct: float | None = None
+    anomaly_shap: dict | None = None
+    # v4: 코호트 z-score/BHI (v18_spec.md Sec.5/D0). T-score 아님.
+    bar_z: float | None = None
+    bhi_z: float | None = None
+    bhi_pct: float | None = None
+    category: str | None = None
 
 
 class XaiFactorOut(ORMBase):
@@ -108,6 +129,7 @@ class BmdMeasurementOut(ORMBase):
     l4_crop_path: str | None = None
     xai_overlay_path: str | None = None
     xai_l4_cam_path: str | None = None
+    xai_bar_l1l5_path: str | None = None
     # 밀도 히트맵 컬러 스케일 (파랑 끝 / 빨강 끝 / L4 평균 감쇠값)
     density_low: float | None = None
     density_high: float | None = None
@@ -141,6 +163,12 @@ class StudyNoteUpdate(BaseModel):
     note: str | None = None
 
 
+class ViewOverrideIn(BaseModel):
+    """의사가 화면에서 AP/LA를 수동 지정할 때의 요청 바디 (v18_spec.md Sec.4.5)."""
+
+    view: Literal["AP", "LA"]
+
+
 class XrayStudyDetail(ORMBase):
     """스터디 선택 시 상세 (원본 + 분할 + BMD)."""
 
@@ -153,6 +181,10 @@ class XrayStudyDetail(ORMBase):
     acquired_at: datetime | None
     modality: str | None
     dicom_meta: str | None = None
+    # 촬영 방향(v18_spec.md Sec.4.5). view_position: "AP"|"LA".
+    # view_source: "auto"(DICOM 태그 자동판별) | "manual"(의사가 수동 지정).
+    view_position: str | None = None
+    view_source: str | None = None
     note: str | None = None
     note_updated_at: datetime | None = None
     status: StudyStatus
@@ -176,3 +208,17 @@ class BmdTrendOut(BaseModel):
     # 변화량 요약
     delta_absolute: float | None = None     # 최신 - 최초
     delta_percent: float | None = None
+    # 측정 정밀도(LSC%) — 보정 이력이 있으면 최신값, 없으면 None(미보정).
+    # |delta_percent| >= lsc_percent 여야 '재위치 노이즈가 아닌 실제 변화'.
+    lsc_percent: float | None = None
+    lsc_calibrated_at: datetime | None = None
+
+
+# ---------- 측정 정밀도 (LSC) ----------
+class PrecisionCalibrationOut(ORMBase):
+    id: str
+    n_studies: int
+    n_repeats: int
+    rms_cv_pct: float
+    lsc_pct: float
+    computed_at: datetime

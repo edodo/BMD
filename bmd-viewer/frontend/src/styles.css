@@ -134,6 +134,31 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
 .bmd-headline .tscore { color: var(--accent); font-size: 13px; }
 .bmd-meta { display: flex; gap: 10px; flex-wrap: wrap; color: var(--muted);
   font-size: 12px; margin: 8px 2px; }
+/* 코호트 BHI 칩 (T-score 아님 -- 이 배포 코호트 내 상대 위치, v18 Sec.4) */
+.bhi-chip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 8px 2px 0; padding: 6px 10px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 8px; font-size: 12px; cursor: help; }
+.bhi-label { color: var(--muted); }
+.bhi-category { color: var(--muted); font-size: 11px; }
+.vertebra-panel { margin-top: 14px; padding: 12px; background: var(--panel);
+  border: 1px solid var(--border); border-radius: 10px; }
+.vertebra-panel h4 { margin: 0; }
+.vertebra-panel > .muted { font-size: 11px; margin: 3px 0 8px; }
+.vertebra-panel .bar-map-l1l5 { margin: 4px 0 12px; }
+.vertebra-panel .bar-map-l1l5 img { width: 100%; border-radius: 8px; display: block;
+  cursor: zoom-in; }
+.vertebra-list { list-style: none; padding: 0; margin: 0; }
+.vertebra-list li { display: flex; align-items: center; gap: 10px;
+  padding: 5px 0; font-size: 13px; border-top: 1px solid var(--border); }
+.vertebra-list li:first-child { border-top: none; }
+.vertebra-list li.is-target { font-weight: 600; }
+.v-label { width: 70px; display: flex; align-items: center; gap: 6px; }
+.v-target-badge { font-size: 9px; font-weight: 600; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 3px; padding: 1px 4px; }
+.v-bar { width: 56px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.vertebra-list li.is-target .v-bar { color: inherit; }
+.v-qc-msg { cursor: help; color: var(--muted); font-size: 12px; }
+.v-anomaly { margin-left: auto; font-size: 10px; cursor: help; white-space: nowrap; }
 .xai-panel { margin-top: 12px; }
 .xai-panel h4 { margin: 0; }
 .xai-panel ul { list-style: none; padding: 0; margin: 8px 0; }
@@ -154,60 +179,11 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
 .xai-heatmap .bargrad { flex: 1; height: 8px; border-radius: 4px;
   background: linear-gradient(to right, #0000ff, #00ffff, #00ff00, #ffff00, #ff0000); }
 
-/* 밀도 게이지: 상단 말풍선(평균/BMD) + 관통 수직선 + 정상/골감소 존 + 그라데이션 바.
-   최솟값/최댓값은 작고 낮은 대비로만 표기. */
-.dens-gauge { position: relative; margin-top: 30px; }
-/* 상단 말풍선(★ Mean … BMD …) — 평균 위치에 배치 */
-.dens-gauge .dens-callout { position: absolute; top: -22px; transform: translateX(-50%);
-  white-space: nowrap; font-size: 11px; font-weight: 700; color: #0f172a;
-  background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
-  padding: 2px 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); z-index: 3; }
-/* 존 가이드라인 + 바를 감싸는 트랙 (수직선이 이 높이를 관통) */
-.dens-gauge .dens-track { position: relative; }
-.dens-gauge .dens-needle { position: absolute; top: 0; bottom: 0; width: 2px;
-  margin-left: -1px; background: #0f172a; z-index: 2; }
-/* 수직선 상단에 아래로 찌르는 ▼ */
-.dens-gauge .dens-needle::before { content: ""; position: absolute; top: -4px;
-  left: 50%; transform: translateX(-50%);
-  border-left: 5px solid transparent; border-right: 5px solid transparent;
-  border-top: 6px solid #0f172a; }
-/* 정상/골감소 참고 존 (연한 점선 가이드라인) */
-.dens-gauge .dens-zoneline { position: relative; display: flex;
-  justify-content: space-between; align-items: center; height: 15px;
-  border-bottom: 1px dashed var(--border); }
-.dens-gauge .dens-zoneline .z { font-size: 9.5px; color: var(--muted); opacity: 0.7; }
-/* 존 경계(설정 임계값 위치) — 옅은 세로 구분선. 위치는 인라인 style(left)로 지정 */
-.dens-gauge .dens-zone-div { position: absolute; top: 0; bottom: 0;
-  width: 0; border-left: 1px dashed var(--muted); opacity: 0.4;
-  transform: translateX(-50%); }
-/* 그라데이션 바 */
-.dens-gauge .dens-bar { margin-top: 5px; }
-.dens-gauge .dens-bar .bargrad { display: block; width: 100%; height: 12px;
-  border-radius: 4px; }
-/* 최솟값 / 최댓값 — 텍스트 작게 + 대비 낮게 */
-.dens-gauge .dens-minmax { display: flex; justify-content: space-between;
-  margin-top: 4px; }
-.dens-gauge .dens-minmax span { font-size: 9px; color: var(--muted); opacity: 0.6; }
-.dens-gauge .dens-minmax em { font-style: normal; }
+/* L4 ROI BAR 히트맵: 컬러바/스케일이 이미지 자체(matplotlib)에 그려져 있으므로
+   별도 DOM 게이지 없이 캡션 한 줄만 붙인다. */
+.density-basis .desc { color: var(--muted); font-size: 11px; margin: 10px 0 0;
+  line-height: 1.5; }
 
-/* 수치(게이지)와 분리된 텍스트 범례 + 주의사항 콜아웃 */
-.density-basis .dens-legend { margin: 12px 0 0; padding-top: 10px;
-  border-top: 1px solid var(--border); font-size: 11px; line-height: 1.5;
-  color: var(--muted); }
-.density-basis .dens-legend .lg { font-weight: 700; }
-.density-basis .dens-legend .lg.blue { color: #1d4ed8; }
-.density-basis .dens-legend .lg.red { color: #dc2626; }
-.density-basis .dens-caveat { display: flex; gap: 8px; align-items: flex-start;
-  margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 11px;
-  line-height: 1.45; }
-.density-basis .dens-caveat .ic { font-size: 14px; line-height: 1.1; flex: none; }
-.density-basis .dens-caveat p { margin: 0; }
-.density-basis .dens-caveat.info { background: #eff6ff; border: 1px solid #bfdbfe;
-  color: #1e40af; }
-.density-basis .dens-caveat.info .ic { color: #2563eb; }
-.density-basis .dens-caveat.warn { background: #fffbeb; border: 1px solid #fde68a;
-  color: #92400e; }
-.density-basis .dens-caveat.warn .ic { color: #d97706; }
 .trend { margin-top: 20px; padding: 14px; background: var(--panel);
   border: 1px solid var(--border); border-radius: 10px; }
 .trend.alert { border-color: #fecaca; box-shadow: 0 0 0 1px #fecaca inset; }
@@ -222,6 +198,34 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
   border-left: 4px solid #dc2626; border-radius: 8px; color: #7f1d1d; font-size: 12px; }
 .trend-alert .flag { color: #dc2626; font-size: 15px; line-height: 1; }
 .trend-alert b { color: #b91c1c; }
+
+/* 측정 정밀도(LSC) 보정 상태 */
+.trend-precision { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 6px; font-size: 11px; }
+.precision-status { color: var(--muted); }
+.precision-status.calibrated { color: #16a34a; }
+.precision-status.uncalibrated { color: #b45309; }
+.calibrate-btn { padding: 3px 8px; font-size: 11px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--panel); color: var(--text); cursor: pointer; }
+.calibrate-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.calibrate-btn:disabled { opacity: 0.6; cursor: default; }
+.precision-error { color: #dc2626; }
+
+/* 촬영 방향(AP/LA) 표시 + 수동 재지정 */
+.view-selector { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 4px 0 10px; padding: 6px 10px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 8px; font-size: 12px; }
+.view-label { color: var(--muted); }
+.view-label b { color: var(--text); }
+.view-source { color: var(--muted); font-size: 11px; }
+.view-toggle { display: flex; align-items: center; gap: 4px; }
+.view-btn { padding: 3px 10px; font-size: 11px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--panel); color: var(--text); cursor: pointer; }
+.view-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.view-apply-btn { padding: 3px 10px; font-size: 11px; border: 1px solid var(--accent);
+  border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer; }
+.view-apply-btn:disabled { opacity: 0.6; cursor: default; }
+.view-error { color: #dc2626; font-size: 11px; }
 
 /* ---------- History 페이저 ---------- */
 .pager { display: flex; align-items: center; justify-content: center; gap: 10px;
@@ -293,6 +297,16 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
   padding: 16px 20px; border-bottom: 1px solid var(--border); }
 .modal-header h3 { margin: 0; font-size: 16px; }
 .modal-close { background: transparent; color: var(--muted); font-size: 16px; padding: 2px 6px; }
+
+/* ---------- 이미지 라이트박스 (클릭해서 크게 보기) ---------- */
+.lightbox-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.78);
+  display: grid; place-items: center; z-index: 200; padding: 32px; }
+.lightbox-img { max-width: 92vw; max-height: 92vh; border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.4); cursor: default; }
+.lightbox-close { position: fixed; top: 18px; right: 22px; background: rgba(255,255,255,.12);
+  color: #fff; font-size: 18px; width: 36px; height: 36px; border-radius: 50%;
+  display: grid; place-items: center; }
+.lightbox-close:hover { background: rgba(255,255,255,.22); }
 .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 13px; }
 .modal-body label { display: flex; flex-direction: column; gap: 5px; font-size: 12px;
   color: var(--muted); }

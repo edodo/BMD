@@ -16,6 +16,13 @@ ultralytics>=8.4.60
 pydicom==3.0.1
 opencv-python-headless==4.10.0.84
 numpy<2.0.0
+# 텍스처(GLCM) 특징 + AE 이상점수 입력 (노트북 v18 Sec.B4/C9)
+scikit-image>=0.24.0
+# AE 이상점수 SHAP 설명 (노트북 v18 Sec.E3)
+shap>=0.44.0
+# L1~L5 BAR 히트맵 그림 (노트북 v18 E2, bar_map/bar_style 이식) — 컬러바 +
+# 0-중심 diverging/sequential 컬러맵 자동 전환은 matplotlib이 가장 정확하다.
+matplotlib>=3.8.0
 # torch/torchvision는 ultralytics 의존성으로 설치됨.
 # GPU(RTX 5060/sm_120) 사용 시 CUDA 빌드로 별도 설치 권장:
 #   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126

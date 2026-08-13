@@ -1,0 +1,70 @@
+def _trimmed_mean(v, lo=10, hi=90):
+    # Mean of the central 80% -- immune to residual endplate, vessel shadow and hot pixels.
+    if v.size == 0:
+        return None
+    p_lo, p_hi = np.percentile(v, [lo, hi])
+    core = v[(v >= p_lo) & (v <= p_hi)]
+    return float(core.mean()) if core.size else float(v.mean())
+
+def compute_bmd(img_norm, roi_mask, full_mask=None, response=None, air=None, exclude=None, view="AP"):
+    """Density indices on one vertebra's trabecular ROI (verbatim from v17 -- was never
+       L4-specific: it takes whichever roi_mask/full_mask it is given).
+
+       PRIMARY
+         bar          : Bone Attenuation Ratio = (A_trab - A_soft) / (A_soft - A_air).
+                        Dimensionless, read as 'this vertebra's trabecular bone adds BAR
+                        times as much attenuation as the surrounding soft tissue'. Invariant
+                        under any affine map A -> a*A + b, i.e. exposure / gain / window-level.
+
+       LEGACY (kept so older CSVs, figures and the web viewer keep working)
+         bmd_trimmed  : 10-90% trimmed mean of the raw normalized intensity
+         bmd_rel      : bmd_trimmed / soft_tissue_ref   (a *ratio*; superseded by bar)
+    """
+    response = response or DEFAULT_RESPONSE
+    vals = img_norm[roi_mask > 0]
+    if vals.size == 0:
+        return None
+    p10, p90 = np.percentile(vals, 10), np.percentile(vals, 90)
+    trimmed = _trimmed_mean(vals)
+    out = {"area_px": int(vals.size), "bmd_mean": float(vals.mean()),
+           "bmd_trimmed": trimmed, "bmd_median": float(np.median(vals)),
+           "bmd_std": float(vals.std()), "bmd_p10": float(p10), "bmd_p90": float(p90),
+           "sat_frac": float(((vals >= 0.999) | (vals <= 0.001)).mean()),
+           "response": response}
+    if full_mask is None:
+        return out
+
+    ref = soft_tissue_ref(img_norm, full_mask, exclude=exclude, view=view)
+    out["soft_tissue_ref"] = ref
+    out["bmd_rel"] = float(trimmed / (ref + 1e-6)) if ref else None     # legacy
+
+    air_gray = air_reference(img_norm) if air is None else float(air)
+    out["air_ref"] = air_gray
+    if ref is None:
+        out["bar"] = None
+        return out
+    A = to_attenuation(img_norm, response)
+    a_trab = _trimmed_mean(A[roi_mask > 0])
+    # to_attenuation is strictly monotone, so it commutes with the median/percentile:
+    a_soft = float(to_attenuation(np.array([[ref]], np.float32), response)[0, 0])
+    a_air  = float(to_attenuation(np.array([[air_gray]], np.float32), response)[0, 0])
+    out["att_trabecular"], out["att_soft"], out["att_air"] = a_trab, a_soft, a_air
+    margin = a_soft - a_air
+    out["soft_air_margin"] = float(margin)
+    out["bar"] = float((a_trab - a_soft) / margin) if margin > QC_MIN_SOFT_MARGIN else None
+    return out
+
+def measure_vertebra_density(gray_lin, mask, response, air, exclude=None, view="AP"):
+    """Single-responsibility: BAR + legacy density fields for ONE vertebra, using the
+       metal-aware ROI from B2. New in v18 (v17 only ever inlined this for the primary L4).
+       `view` ("AP"|"LA"|"unknown") selects soft_tissue_ref()'s band strategy (Sec.4.5);
+       default "AP" reproduces the exact v17 numbers (see the B gate)."""
+    roi, metal_mask, metal_frac = vertebra_roi(gray_lin, mask)
+    out = compute_bmd(gray_lin, roi, full_mask=mask, response=response, air=air, exclude=exclude, view=view) or {}
+    out["metal_frac"] = metal_frac
+    _, out["soft_tissue_metal_frac"] = soft_band_metal_check(gray_lin, mask, exclude=exclude)
+    out["_roi"] = roi              # kept for B4/B6/viz reuse; stripped before the record is saved
+    return out
+
+print("B3 ready: compute_bmd (verbatim) / measure_vertebra_density (new, metal-aware, per-vertebra, "
+      "now also flags suspected hardware in the soft-tissue reference band, view-adaptive)")

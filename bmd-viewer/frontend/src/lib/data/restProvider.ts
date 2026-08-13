@@ -6,6 +6,7 @@ import type {
   BmdTrend,
   Patient,
   PatientListItem,
+  PrecisionCalibration,
   XrayStudyDetail,
   XrayStudyListItem,
 } from "@/lib/types";
@@ -132,6 +133,31 @@ export class RestDataProvider implements DataProvider {
   async getBmdTrend(patientId: string): Promise<BmdTrend> {
     const { data } = await this.http.get<BmdTrend>(
       `/patients/${patientId}/bmd-trend`
+    );
+    return data;
+  }
+
+  async overrideView(
+    studyId: string,
+    view: "AP" | "LA"
+  ): Promise<XrayStudyDetail> {
+    const { data } = await this.http.post<XrayStudyDetail>(
+      `/studies/${studyId}/view`,
+      { view }
+    );
+    return data;
+  }
+
+  async getLscCalibration(): Promise<PrecisionCalibration | null> {
+    const { data } = await this.http.get<PrecisionCalibration | null>(
+      "/precision/lsc"
+    );
+    return data;
+  }
+
+  async calibratePrecision(): Promise<PrecisionCalibration> {
+    const { data } = await this.http.post<PrecisionCalibration>(
+      "/precision/calibrate"
     );
     return data;
   }

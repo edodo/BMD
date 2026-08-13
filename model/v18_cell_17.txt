@@ -1,0 +1,94 @@
+# -------------------- metal-hardware detection (new in v18) --------------------
+METAL_SAT_THRESH   = 0.99     # near-saturation floor on the robustly-windowed [0,1] image
+METAL_FLAT_VAR     = 0.0008   # local-variance ceiling: real bone texture exceeds this even when bright
+METAL_FLAT_WIN     = 5        # local-variance window (px)
+METAL_MIN_BLOB_PX  = 12       # drop smaller connected components (hot pixels, not hardware)
+METAL_HALO_PX      = 2        # grow the confirmed core by this many px before re-including border
+
+def detect_metal_mask(gray_lin, mask, sat_thresh=METAL_SAT_THRESH, flat_var=METAL_FLAT_VAR,
+                       flat_win=METAL_FLAT_WIN, min_blob_px=METAL_MIN_BLOB_PX, halo_px=METAL_HALO_PX):
+    """Suspected metallic-hardware pixels inside `mask` (one vertebra body).
+
+       Physical basis: implants attenuate essentially all incident radiation, saturating the
+       detector at its own dynamic-range ceiling -- a FLAT, sharply-bordered blob, unlike
+       trabecular bone which keeps continuous texture even at its brightest. We require BOTH
+       (a) near-saturation on the image's OWN [0,1] robust window (exposure-independent, same
+       spirit as BAR itself) and (b) low local variance, then drop components smaller than
+       `min_blob_px` (single hot pixels are not hardware).
+
+       The variance window itself blurs the RIM of any saturated blob (real or synthetic) into
+       "not flat", since it mixes saturated and non-saturated neighbors right at the edge -- so
+       the flatness-filtered core systematically excludes the blob's own border. We grow that
+       confirmed core by `halo_px` and re-admit any pixel in the halo that is STILL saturated
+       (but skip the flatness test there), which recovers the border ring without pulling in
+       unrelated saturated spots elsewhere in the vertebra body.
+
+       Returns (metal_mask uint8 [H,W], metal_frac) where metal_frac is the fraction of the
+       WHOLE vertebra body flagged -- used by the QC gate below, since even a screw head at the
+       cortex (outside the trabecular ROI) means this vertebra is instrumented."""
+    m = (mask > 0)
+    body_px = int(m.sum())
+    if body_px < 20:
+        return np.zeros_like(mask, np.uint8), 0.0
+
+    sat = gray_lin >= sat_thresh
+    mean = cv2.blur(gray_lin, (flat_win, flat_win))
+    mean_sq = cv2.blur(gray_lin.astype(np.float64) ** 2, (flat_win, flat_win))
+    local_var = np.clip(mean_sq - mean.astype(np.float64) ** 2, 0, None)
+    flat = local_var < flat_var
+
+    cand = (sat & flat & m).astype(np.uint8)
+    if not cand.any():
+        return np.zeros_like(mask, np.uint8), 0.0
+    cand = cv2.morphologyEx(cand, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+
+    n, lbl, stats, _ = cv2.connectedComponentsWithStats(cand, connectivity=8)
+    core = np.zeros_like(mask, np.uint8)
+    for i in range(1, n):                      # 0 = background
+        if stats[i, cv2.CC_STAT_AREA] >= min_blob_px:
+            core[lbl == i] = 1
+    if not core.any():
+        return np.zeros_like(mask, np.uint8), 0.0
+
+    k = 2 * halo_px + 1
+    halo = cv2.dilate(core, np.ones((k, k), np.uint8))
+    out = (halo.astype(bool) & sat & m).astype(np.uint8)
+    metal_frac = float(out.sum()) / body_px
+    return out, metal_frac
+
+def vertebra_roi(gray_lin, mask):
+    """Metal-aware trabecular ROI for ONE vertebra: trabecular_roi(mask) with any detected
+       hardware blob subtracted, so a screw cannot be measured as very dense bone.
+       Returns (roi_mask, metal_mask, metal_frac)."""
+    metal_mask, metal_frac = detect_metal_mask(gray_lin, mask)
+    roi = trabecular_roi(mask)
+    roi = (roi.astype(bool) & ~metal_mask.astype(bool)).astype(np.uint8)
+    return roi, metal_mask, metal_frac
+
+def soft_band_metal_check(gray_lin, full_mask, exclude=None):
+    """WARN-only check: does the paraspinal soft-tissue reference band itself (the rectangles
+       soft_tissue_ref() samples A_soft from) look like it contains metallic hardware?
+
+       `detect_metal_mask` above actively EXCLUDES hardware from the trabecular ROI. This
+       function does not do that for the soft-tissue band -- soft_tissue_ref() already uses a
+       low-order percentile (SOFT_TISSUE_PCT), which is robust to a MINORITY bright contaminant
+       by the same one-sided-contamination argument v17 used for rib/posterior-element leakage
+       (B1). So we do not change A_soft's calculation; we only flag when the band looks
+       hardware-contaminated, which matters most exactly where B2's docstring calls out --
+       pelvic fixation hardware lateral to L5. Reuses detect_metal_mask's own logic, just scoped
+       to the band rectangles instead of the vertebra body.
+
+       Returns (suspected: bool, frac: float fraction of the band flagged)."""
+    bands = soft_tissue_bands(full_mask, gray_lin.shape)
+    if not bands:
+        return False, 0.0
+    band_mask = np.zeros(gray_lin.shape[:2], np.uint8)
+    for (x0, y0, x1, y1) in bands:
+        band_mask[y0:y1, x0:x1] = 1
+    if exclude is not None:
+        band_mask = (band_mask.astype(bool) & (exclude == 0)).astype(np.uint8)
+    metal_in_band, frac = detect_metal_mask(gray_lin, band_mask)
+    return bool(metal_in_band.any()), frac
+
+print("B2 ready: detect_metal_mask / vertebra_roi (metal-aware trabecular ROI) / "
+      "soft_band_metal_check (warn-only, paraspinal reference band)")

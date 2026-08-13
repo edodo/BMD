@@ -89,6 +89,7 @@ def _apply_lightweight_migrations(conn) -> None:
         {
             "xai_overlay_path": "VARCHAR(512)",
             "xai_l4_cam_path": "VARCHAR(512)",
+            "xai_bar_l1l5_path": "VARCHAR(512)",
             "density_low": "FLOAT",
             "density_high": "FLOAT",
             "roi_mean_intensity": "FLOAT",
@@ -97,4 +98,33 @@ def _apply_lightweight_migrations(conn) -> None:
             "l4_density_grid": "JSON",
         },
     )
-    _add_missing("xray_studies", {"overlay_path": "VARCHAR(512)"})
+    _add_missing(
+        "xray_studies",
+        {
+            "overlay_path": "VARCHAR(512)",
+            "view_position": "VARCHAR(8)",
+            "view_source": "VARCHAR(8)",
+        },
+    )
+    _add_missing(
+        "vertebra_segments",
+        {
+            "bar": "FLOAT",
+            "qc_status": "VARCHAR(8)",
+            "qc_message": "TEXT",
+            "glcm_contrast": "FLOAT",
+            "glcm_correlation": "FLOAT",
+            "glcm_energy": "FLOAT",
+            "glcm_homogeneity": "FLOAT",
+            "glcm_entropy": "FLOAT",
+            "vario_slope": "FLOAT",
+            "fractal_dim": "FLOAT",
+            "anomaly_mse": "FLOAT",
+            "anomaly_pct": "FLOAT",
+            "anomaly_shap": "JSON",
+            "bar_z": "FLOAT",
+            "bhi_z": "FLOAT",
+            "bhi_pct": "FLOAT",
+            "category": "VARCHAR(64)",
+        },
+    )

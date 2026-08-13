@@ -32,6 +32,33 @@ export interface VertebraSegment {
   bbox_h: number;
   mask_path: string | null;
   mean_intensity: number | null;
+  // v2: populated for EVERY detected vertebra (used to be target(L4)-only).
+  bar: number | null;
+  qc_status: "PASS" | "WARN" | "FAIL" | null;
+  qc_message: string | null;
+  // v3: trabecular microarchitecture texture (GLCM/variogram/fractal) + AE
+  // reconstruction-error anomaly score (v18_spec.md Sec.5/C9). Cohort-relative,
+  // not a diagnosis -- null whenever any input feature is unavailable (e.g. ROI
+  // too small for a stable fractal-dimension estimate).
+  glcm_contrast: number | null;
+  glcm_correlation: number | null;
+  glcm_energy: number | null;
+  glcm_homogeneity: number | null;
+  glcm_entropy: number | null;
+  vario_slope: number | null;
+  fractal_dim: number | null;
+  anomaly_mse: number | null;
+  anomaly_pct: number | null;
+  // SHAP (KernelExplainer): how much each feature pushed the anomaly score up
+  // (+) or down (-) for this vertebra (v18_spec.md Sec.5/E3). null whenever
+  // anomaly_pct is null.
+  anomaly_shap: Record<string, number> | null;
+  // v4: cohort z-score / BHI (v18_spec.md Sec.5/D0). NOT a DXA T-score --
+  // relative position within this deployment's own reference cohort only.
+  bar_z: number | null;
+  bhi_z: number | null;
+  bhi_pct: number | null;
+  category: string | null;
 }
 
 export interface XaiFactor {
@@ -53,6 +80,7 @@ export interface BmdMeasurement {
   l4_crop_path: string | null;
   xai_overlay_path: string | null;
   xai_l4_cam_path: string | null;
+  xai_bar_l1l5_path: string | null;
   // 밀도 히트맵 컬러 스케일 (이미지별로 다름):
   // density_low = 파란색(저밀도) 끝, density_high = 빨간색(고밀도) 끝,
   // roi_mean_intensity = 이 L4 평균 감쇠값 (스케일 위 위치)
@@ -93,6 +121,11 @@ export interface XrayStudyDetail {
   overlay_path: string | null; // 부분 실패 시 검출 오버레이
   acquired_at: string | null;
   modality: string | null;
+  // 촬영 방향(v18 Sec.4.5): view_position "AP"|"LA", view_source "auto"|"manual".
+  // 자동판별 태그가 없으면 AP를 기본으로 쓰고(view_source="auto"), 자동판별이
+  // 틀렸다면 의사가 화면에서 수동 지정해 재계산할 수 있다(view_source="manual").
+  view_position: "AP" | "LA" | null;
+  view_source: "auto" | "manual" | null;
   status: StudyStatus;
   error_message: string | null;
   uploaded_at: string;
@@ -112,6 +145,18 @@ export interface BmdTrend {
   points: BmdTrendPoint[];
   delta_absolute: number | null;
   delta_percent: number | null;
+  // 측정 정밀도(LSC%) — 보정 이력이 있으면 최신값, 없으면 null(미보정).
+  lsc_percent: number | null;
+  lsc_calibrated_at: string | null;
+}
+
+export interface PrecisionCalibration {
+  id: string;
+  n_studies: number;
+  n_repeats: number;
+  rms_cv_pct: number;
+  lsc_pct: number;
+  computed_at: string;
 }
 
 export interface AuthSession {

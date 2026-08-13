@@ -7,6 +7,7 @@ import type {
   BmdTrend,
   Patient,
   PatientListItem,
+  PrecisionCalibration,
   XrayStudyDetail,
   XrayStudyListItem,
 } from "@/lib/types";
@@ -35,9 +36,14 @@ export interface DataProvider {
   getStudy(studyId: string): Promise<XrayStudyDetail>;
   deleteStudy(studyId: string): Promise<void>;
   updateStudyNote(studyId: string, note: string): Promise<XrayStudyDetail>;
+  overrideView(studyId: string, view: "AP" | "LA"): Promise<XrayStudyDetail>;
 
   // BMD 추세
   getBmdTrend(patientId: string): Promise<BmdTrend>;
+
+  // 측정 정밀도(LSC) 보정
+  getLscCalibration(): Promise<PrecisionCalibration | null>;
+  calibratePrecision(): Promise<PrecisionCalibration>;
 
   // 정적 산출물(preview/gradcam/mask) URL 변환
   assetUrl(path: string | null): string | null;

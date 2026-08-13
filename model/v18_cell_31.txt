@@ -1,0 +1,40 @@
+def bar_map(img_norm, full_mask, response=None, air=None, exclude=None, view="AP"):
+    """Per-pixel Bone Attenuation Ratio: (A(x,y) - A_soft) / (A_soft - A_air).
+
+       0 = indistinguishable from the surrounding paraspinal soft tissue. Because the map is an
+       AFFINE function of A for fixed references, and percentile trimming is order-preserving,
+       the 10-90% trimmed mean of this map over the trabecular ROI equals the scalar `bar`
+       exactly (verified below) -- so the heatmap is a faithful decomposition of the number,
+       for whichever vertebra `full_mask` belongs to. `view` matches soft_tissue_ref() (Sec.4.5).
+
+       Returns (bar_map[H,W] float32 or None, a_soft, a_air)."""
+    response = response or DEFAULT_RESPONSE
+    ref = soft_tissue_ref(img_norm, full_mask, exclude=exclude, view=view)
+    if ref is None:
+        return None, None, None
+    air_gray = air_reference(img_norm) if air is None else float(air)
+    A = to_attenuation(img_norm, response)
+    a_soft = float(to_attenuation(np.array([[ref]], np.float32), response)[0, 0])
+    a_air = float(to_attenuation(np.array([[air_gray]], np.float32), response)[0, 0])
+    margin = a_soft - a_air
+    if margin <= QC_MIN_SOFT_MARGIN:
+        return None, a_soft, a_air
+    return ((A - a_soft) / margin).astype(np.float32), a_soft, a_air
+
+def bar_style(vals):
+    """Colour scale for a BAR heatmap, always anchored at 0 = soft-tissue level.
+       Diverging ('RdBu_r') if the ROI straddles 0, sequential ('inferno') if all-positive
+       (a diverging map's white midpoint would sit at an arbitrary value otherwise)."""
+    from matplotlib.colors import TwoSlopeNorm, Normalize
+    v = np.asarray(vals, np.float32)
+    v = v[np.isfinite(v)]
+    if v.size == 0:
+        return None, "inferno"
+    lo, hi = float(np.percentile(v, 1)), float(np.percentile(v, 99))
+    if hi <= lo:
+        hi = lo + 1e-6
+    if lo < 0 < hi:
+        return TwoSlopeNorm(vmin=lo, vcenter=0.0, vmax=hi), "RdBu_r"
+    return Normalize(vmin=min(0.0, lo), vmax=hi), "inferno"
+
+print("B6 ready: bar_map / bar_style (verbatim)")

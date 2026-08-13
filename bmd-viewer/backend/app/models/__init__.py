@@ -7,6 +7,10 @@
   BmdMeasurement   --(1:N)-->  VertebraSegment (추출된 척추 분할)
   BmdMeasurement   --(1:N)-->  XaiFactor (설명성: 값에 영향 준 항목)
 
+  PrecisionCalibration — 위 체인에 속하지 않는 독립 테이블. 특정 환자가 아닌
+  '이 파이프라인의 측정 정밀도(LSC)'라는 시스템 속성이라 doctor/patient에
+  종속되지 않는다.
+
 다른 프로젝트 통합을 고려해 테이블명에 prefix 없이 일반 명사를 사용하되,
 혼선이 우려되면 __tablename__만 일괄 수정하면 된다.
 """
@@ -129,6 +133,12 @@ class XrayStudy(Base):
     # 추가 DICOM 태그 (JSON 문자열로 저장: 환자정보/장비/해상도 등)
     dicom_meta: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # 촬영 방향(AP/LA) — 연부조직 기준값 밴드 전략 선택에 쓰인다(v18_spec.md
+    # Sec.4.5). view_position: "AP"|"LA". view_source: "auto"(DICOM 태그로
+    # 자동 판별) | "manual"(태그가 없거나 틀려서 의사가 직접 지정 후 재계산).
+    view_position: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    view_source: Mapped[str | None] = mapped_column(String(8), nullable=True)
+
     # 의사가 이 스터디에 작성하는 메모
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     # 메모 최종 작성/수정 일시
@@ -187,6 +197,10 @@ class BmdMeasurement(Base):
     xai_l4_cam_path: Mapped[str | None] = mapped_column(
         String(512), nullable=True
     )
+    # L1~L5 전체 BAR 히트맵 (5-패널, 노트북 v18 E2) 이미지 경로
+    xai_bar_l1l5_path: Mapped[str | None] = mapped_column(
+        String(512), nullable=True
+    )
 
     # 밀도 히트맵 컬러 스케일 (이미지별로 다름). 프론트에서 파랑/빨강 끝
     # 값과 L4 평균 위치를 눈금으로 표시하는 데 사용.
@@ -242,6 +256,31 @@ class VertebraSegment(Base):
     mask_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # 해당 척추의 평균 픽셀 강도 등 보조값
     mean_intensity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # v2: 모든 검출 척추(L1~L5)에 대해 산출 (예전엔 target(L4)만 BAR를 가졌음).
+    bar: Mapped[float | None] = mapped_column(Float, nullable=True)
+    qc_status: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    qc_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # v3: 골소주 미세구조 텍스처(노트북 v18 Sec.B4) + AE 이상점수(Sec.C9).
+    glcm_contrast: Mapped[float | None] = mapped_column(Float, nullable=True)
+    glcm_correlation: Mapped[float | None] = mapped_column(Float, nullable=True)
+    glcm_energy: Mapped[float | None] = mapped_column(Float, nullable=True)
+    glcm_homogeneity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    glcm_entropy: Mapped[float | None] = mapped_column(Float, nullable=True)
+    vario_slope: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fractal_dim: Mapped[float | None] = mapped_column(Float, nullable=True)
+    anomaly_mse: Mapped[float | None] = mapped_column(Float, nullable=True)
+    anomaly_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # SHAP(KernelExplainer): 이상점수에 각 특징이 기여한 정도 (v18 Sec.E3).
+    # {feature_name: shap_value}. SQLite엔 JSON(TEXT)로 저장.
+    anomaly_shap: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    # v4: 코호트 z-score/BHI (노트북 v17 §3 -> v18 D0). T-score 아님 — 이
+    # 배포 코호트 내 상대 위치일 뿐(v18_spec.md Sec.4 정직성 원칙).
+    bar_z: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bhi_z: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bhi_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    category: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     measurement: Mapped[BmdMeasurement] = relationship(
         back_populates="segments"
@@ -272,4 +311,24 @@ class XaiFactor(Base):
 
     measurement: Mapped[BmdMeasurement] = relationship(
         back_populates="xai_factors"
+    )
+
+
+class PrecisionCalibration(Base):
+    """측정 정밀도(LSC) 보정 결과 — 재위치 섭동 재측정으로 얻은 RMS-CV%/LSC%.
+
+    특정 환자가 아니라 '이 파이프라인이 얼마나 정밀한가'라는 시스템 속성이므로
+    doctor/patient에 종속시키지 않는다. 매 보정마다 새 행을 추가(감사 이력),
+    조회는 항상 최신 행(computed_at DESC LIMIT 1)을 사용한다.
+    """
+
+    __tablename__ = "precision_calibrations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    n_studies: Mapped[int] = mapped_column(Integer)
+    n_repeats: Mapped[int] = mapped_column(Integer)
+    rms_cv_pct: Mapped[float] = mapped_column(Float)
+    lsc_pct: Mapped[float] = mapped_column(Float)
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
     )

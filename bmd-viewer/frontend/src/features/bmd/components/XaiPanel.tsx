@@ -63,16 +63,18 @@ export function XaiPanel({
 
       {camUrl && (
         <div className="xai-heatmap">
-          <h5>Model attention — L4 Eigen-CAM</h5>
-          <img src={camUrl} alt="L4-cropped Eigen-CAM attribution" />
+          <h5>Model attention — L4 Grad-CAM</h5>
+          <img src={camUrl} alt="L4-cropped Seg-Grad-CAM attribution" />
           <div className="xai-scale">
             <span className="muted">Low</span>
             <span className="bargrad" aria-hidden="true" />
             <span className="muted">High attention</span>
           </div>
           <p className="desc">
-            Where the segmentation model focused within the L4 crop
-            (class-agnostic Eigen-CAM) — context, not the density calculation.
+            Where the segmentation model focused within the L4 crop — a real
+            gradient (Seg-Grad-CAM) traced back from the L1–L5 mask scores,
+            not just a class-agnostic activation summary. Context for the
+            detection, not the density calculation itself.
           </p>
         </div>
       )}

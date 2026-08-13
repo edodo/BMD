@@ -70,7 +70,12 @@ class Settings(BaseSettings):
     bmd_roi_shrink: float = 0.85
     # 종적 대조(compare)용 L4 밀도 격자 크기(N×N). 두 검사의 L4 ROI를 각자
     # bbox 기준 N×N로 리샘플해 셀 단위로 비교(골손실 부위 검출)한다.
-    bmd_diff_grid_n: int = 12
+    # 12(144칸)는 카드 폭(240px) 안에서 칸 하나가 20px로 뭉툭해 보인다는
+    # 리포트로 20(400칸)으로 올림 — L4 bbox가 보통 수백 px는 되므로 셀당
+    # 유효 픽셀이 비는 경우는 드물다. 기존 스터디는 예전 해상도로 저장돼
+    # 있어 재추론(scripts/reinfer_bar.py 류) 전까지는 대조 그리드가 안 뜬다
+    # (길이가 달라 BoneLossGrid가 조용히 null을 반환).
+    bmd_diff_grid_n: int = 20
 
     # --- CORS ---
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]

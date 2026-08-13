@@ -23,6 +23,31 @@ class SegmentResult:
     bbox: tuple[float, float, float, float]  # (x, y, w, h) 정규화
     mask_path: str | None = None
     mean_intensity: float | None = None
+    # v2: 모든 검출 척추에 대해 산출 (예전엔 target(L4)만 BAR를 가졌음).
+    bar: float | None = None                 # Bone Attenuation Ratio (해당 척추)
+    qc_status: str | None = None             # "PASS" | "WARN" | "FAIL"
+    qc_message: str | None = None            # QC 사유 (여러 개면 "; "로 join)
+    # v3: 골소주 미세구조 텍스처(노트북 v18 Sec.B4) + AE 이상점수(Sec.C9).
+    glcm_contrast: float | None = None
+    glcm_correlation: float | None = None
+    glcm_energy: float | None = None
+    glcm_homogeneity: float | None = None
+    glcm_entropy: float | None = None
+    vario_slope: float | None = None
+    fractal_dim: float | None = None
+    # 재구성오차(MSE)와 '정상' 코호트 대비 백분위. 특징이 하나라도 없으면(QC 등)
+    # 둘 다 None — 임상 확정 진단이 아니라 코호트 상대적 이상 신호일 뿐이다.
+    anomaly_mse: float | None = None
+    anomaly_pct: float | None = None
+    # SHAP(KernelExplainer): 이상점수에 각 특징이 기여한 정도 (v18 Sec.E3).
+    # {feature_name: shap_value}. anomaly_pct가 None이면 이것도 None.
+    anomaly_shap: dict | None = None
+    # v4: 코호트 z-score/BHI (노트북 v17 §3 -> v18 D0). T-score가 아니라 이
+    # 배포 코호트 내 상대 위치 — DXA 진단 아님(v18_spec.md Sec.4).
+    bar_z: float | None = None       # BAR의 코호트 z-score
+    bhi_z: float | None = None       # BAR+텍스처 가중합 복합 z-score
+    bhi_pct: float | None = None     # 복합 z-score의 코호트 백분위(0-100)
+    category: str | None = None      # WHO 컷포인트를 bar_z에 적용한 라벨
 
 
 @dataclass
@@ -48,6 +73,7 @@ class InferenceResult:
     l4_crop_path: str | None = None      # 추출된 L4 크롭 이미지
     xai_overlay_path: str | None = None  # 밀도 근거 히트맵 (L4 ROI 실제 감쇠)
     xai_l4_cam_path: str | None = None   # L4 크롭 Eigen-CAM 어트리뷰션
+    xai_bar_l1l5_path: str | None = None  # L1~L5 전체 BAR 히트맵 (5-패널)
     # 밀도 히트맵 컬러 스케일 (이미지별로 다름):
     #   density_low  = 파란색(저밀도) 끝 감쇠값
     #   density_high = 빨간색(고밀도) 끝 감쇠값
@@ -66,6 +92,9 @@ class InferenceResult:
     acquired_at: str | None = None       # DICOM 메타에서 추출
     modality: str | None = None
     dicom_meta: dict | None = None       # 추가 DICOM 태그
+    # 촬영 방향(v18_spec.md Sec.4.5) — soft_tissue_ref() 밴드 전략 선택에 쓰인다.
+    view_position: str | None = None     # "AP" | "LA"
+    view_source: str | None = None       # "auto" | "manual"
 
 
 class PartialInferenceError(RuntimeError):
@@ -101,12 +130,19 @@ class BmdInferenceEngine(abc.ABC):
     """
 
     @abc.abstractmethod
-    def run(self, dicom_path: Path, output_dir: Path) -> InferenceResult:
+    def run(
+        self,
+        dicom_path: Path,
+        output_dir: Path,
+        view_override: str | None = None,
+    ) -> InferenceResult:
         """단일 DICOM에 대해 전체 파이프라인을 실행한다.
 
         Args:
             dicom_path: 입력 DICOM 파일 경로
             output_dir: preview/mask/gradcam 등 파생 산출물 저장 디렉토리
+            view_override: "AP"|"LA"를 명시하면 DICOM 태그 자동판별을 건너뛰고
+                이 값을 그대로 쓴다 (의사가 뷰를 수동 지정해 재계산할 때).
 
         Returns:
             InferenceResult
@@ -123,7 +159,12 @@ class StubBmdEngine(BmdInferenceEngine):
 
     MODEL_VERSION = "stub-0.1.0"
 
-    def run(self, dicom_path: Path, output_dir: Path) -> InferenceResult:
+    def run(
+        self,
+        dicom_path: Path,
+        output_dir: Path,
+        view_override: str | None = None,
+    ) -> InferenceResult:
         import random
 
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -153,6 +194,8 @@ class StubBmdEngine(BmdInferenceEngine):
             model_version=self.MODEL_VERSION,
             segments=segments,
             xai_factors=xai,
+            view_position=view_override or "AP",
+            view_source="manual" if view_override else "auto",
         )
 
 
