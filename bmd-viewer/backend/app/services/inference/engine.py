@@ -74,6 +74,7 @@ class InferenceResult:
     xai_overlay_path: str | None = None  # 밀도 근거 히트맵 (L4 ROI 실제 감쇠)
     xai_l4_cam_path: str | None = None   # L4 크롭 Eigen-CAM 어트리뷰션
     xai_bar_l1l5_path: str | None = None  # L1~L5 전체 BAR 히트맵 (5-패널)
+    xai_air_soft_path: str | None = None  # air/연부조직 기준값 근거 + BAR 계산식
     # 밀도 히트맵 컬러 스케일 (이미지별로 다름):
     #   density_low  = 파란색(저밀도) 끝 감쇠값
     #   density_high = 빨간색(고밀도) 끝 감쇠값

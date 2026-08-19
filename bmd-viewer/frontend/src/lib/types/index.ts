@@ -81,6 +81,7 @@ export interface BmdMeasurement {
   xai_overlay_path: string | null;
   xai_l4_cam_path: string | null;
   xai_bar_l1l5_path: string | null;
+  xai_air_soft_path: string | null;
   // 밀도 히트맵 컬러 스케일 (이미지별로 다름):
   // density_low = 파란색(저밀도) 끝, density_high = 빨간색(고밀도) 끝,
   // roi_mean_intensity = 이 L4 평균 감쇠값 (스케일 위 위치)

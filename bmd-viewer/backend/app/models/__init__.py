@@ -201,6 +201,10 @@ class BmdMeasurement(Base):
     xai_bar_l1l5_path: Mapped[str | None] = mapped_column(
         String(512), nullable=True
     )
+    # air/연부조직 기준값이 실제로 어느 픽셀에서 왔는지 + BAR 계산식 이미지 경로
+    xai_air_soft_path: Mapped[str | None] = mapped_column(
+        String(512), nullable=True
+    )
 
     # 밀도 히트맵 컬러 스케일 (이미지별로 다름). 프론트에서 파랑/빨강 끝
     # 값과 L4 평균 위치를 눈금으로 표시하는 데 사용.

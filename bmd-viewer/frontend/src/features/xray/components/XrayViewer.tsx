@@ -4,6 +4,7 @@ import { getDataProvider } from "@/lib/data";
 import { XaiPanel } from "@/features/bmd/components/XaiPanel";
 import { VertebraPanel } from "@/features/bmd/components/VertebraPanel";
 import { DensityBasis } from "@/features/bmd/components/DensityBasis";
+import { AirSoftBasis } from "@/features/bmd/components/AirSoftBasis";
 import { ViewSelector } from "@/features/bmd/components/ViewSelector";
 import { BhiChip } from "@/features/bmd/components/BhiChip";
 import { StudyNote } from "./StudyNote";
@@ -97,6 +98,7 @@ export function XrayViewer({ studyId }: { studyId: string }) {
   const xaiDensity = dp.assetUrl(m?.xai_overlay_path ?? null);
   const xaiCam = dp.assetUrl(m?.xai_l4_cam_path ?? null);
   const xaiBarL1L5 = dp.assetUrl(m?.xai_bar_l1l5_path ?? null);
+  const xaiAirSoft = dp.assetUrl(m?.xai_air_soft_path ?? null);
 
   // Parse DICOM metadata JSON (stored as string)
   let meta: Record<string, unknown> = {};
@@ -163,6 +165,14 @@ export function XrayViewer({ studyId }: { studyId: string }) {
             />
           )}
         </div>
+
+        {/* (6) Reference basis: full width, below the crop/density row --
+             shows the whole X-ray (air is usually near the edges, the
+             soft-tissue ring is beside L4), so it doesn't fit the narrow
+             two-column row above. */}
+        {xaiAirSoft && (
+          <AirSoftBasis imageUrl={`${xaiAirSoft}?v=${study.id}`} />
+        )}
 
         {/* Notes: full width below the row */}
         <StudyNote

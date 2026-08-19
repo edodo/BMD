@@ -130,6 +130,7 @@ class BmdMeasurementOut(ORMBase):
     xai_overlay_path: str | None = None
     xai_l4_cam_path: str | None = None
     xai_bar_l1l5_path: str | None = None
+    xai_air_soft_path: str | None = None
     # 밀도 히트맵 컬러 스케일 (파랑 끝 / 빨강 끝 / L4 평균 감쇠값)
     density_low: float | None = None
     density_high: float | None = None

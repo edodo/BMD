@@ -184,6 +184,14 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
 .density-basis .desc { color: var(--muted); font-size: 11px; margin: 10px 0 0;
   line-height: 1.5; }
 
+/* air/연부조건 기준값 근거: 전체 이미지를 보여줘야 해서(air는 대개 가장자리,
+   연부조직 링은 L4 옆) l4-density-row의 좁은 2단 레이아웃엔 안 넣고 그 아래
+   전체 폭으로 배치한다. */
+.air-soft-basis { margin-top: 20px; }
+.air-soft-basis h4 { margin: 0 0 8px; font-size: 14px; }
+.air-soft-basis .desc { color: var(--muted); font-size: 11px; margin: 10px 0 0;
+  line-height: 1.5; }
+
 .trend { margin-top: 20px; padding: 14px; background: var(--panel);
   border: 1px solid var(--border); border-radius: 10px; }
 .trend.alert { border-color: #fecaca; box-shadow: 0 0 0 1px #fecaca inset; }

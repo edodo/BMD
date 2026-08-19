@@ -736,6 +736,10 @@ class YoloBmdEngine(BmdInferenceEngine):
         # 보이려면 figure 종횡비가 box의 실제 종횡비를 따라가야 한다 —
         # 고정 (4.6,4.8)은 box가 정사각형에 가깝다고 가정해, 더 넓적한
         # box에서는 뼈 그림이 작게 들어가고 여백만 커 보였다(리포트로 발견).
+        # 컬러바는 오른쪽에 두면 ax 폭을 갉아먹어, 같은 폭으로 맞춘
+        # l4_crop.png보다 뼈 그림이 좁게 나온다(리포트: "두 이미지 크기가 안
+        # 맞는다") — 아래쪽 가로 컬러바로 바꿔 ax 폭은 그대로 두고 높이만
+        # 늘려서 크롭과 이미지 폭이 맞도록 한다.
         cx1, cy1, cx2, cy2 = box
         w, h = max(cx2 - cx1, 1), max(cy2 - cy1, 1)
         fig_h = 4.6
@@ -744,12 +748,149 @@ class YoloBmdEngine(BmdInferenceEngine):
         panel = {"bar": bar_val, "bar_map": bar_map, "roi": roi, "box": box}
         im = cls._draw_bar_panel(ax, rgb, panel, label)
         if im is not None:
-            # 컬러바를 더 작게: L4 crop 패널과 크기를 맞추려면 컬러바가
-            # 화면 폭을 덜 차지해야 한다는 리포트로 fraction/shrink 축소.
-            cbar = plt.colorbar(im, ax=ax, fraction=0.035, pad=0.03, shrink=0.85)
+            cbar = plt.colorbar(
+                im, ax=ax, orientation="horizontal",
+                fraction=0.06, pad=0.06, shrink=0.9,
+            )
             cbar.ax.tick_params(labelsize=8)
         fig.tight_layout()
         fig.savefig(out_path, dpi=130, bbox_inches="tight", pad_inches=0.05)
+        plt.close(fig)
+
+    @classmethod
+    def _build_air_soft_heatmap(
+        cls, gray_lin, masks_xy, l4_i, valid, bone_dil, l4_window, view,
+        bar_val, bar_parts, out_path,
+    ):
+        """BAR의 두 기준값(연부조직·air)이 실제로 어느 픽셀에서 왔는지 + 계산식을
+        한 장에 보여주는 XAI 패널 (scripts/debug_air_soft_combined_visualize.py와
+        동일 로직, 프로덕션용으로 이식).
+
+        다른 XAI 패널(밀도 히트맵 등)은 L4로 좁게 크롭하지만, 이건 전체 이미지를
+        보여준다 — air 배경은 대개 이미지 가장자리에, 연부조직 링은 L4 바로
+        옆에 있어서 둘 다 보이려면 전체 프레임이 필요하다.
+
+        색: 노랑=air(실제 사용), 남색=air(그림자로 제외), 초록=연부조직(채택),
+        하늘색=연부조직(버려진 쪽), 빨강 채움=L4(target), 파랑 윤곽선=나머지 척추.
+        """
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        H, W = gray_lin.shape[:2]
+
+        # ---- air: _air_reference()와 동일 로직 (테두리-연결성 + 그림자/직접노출) ----
+        u8 = (np.clip(gray_lin, 0, 1) * 255).astype(np.uint8)
+        thr, _ = cv2.threshold(u8, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        bg_mask_raw = u8 < thr
+        bg_mask = cls._border_connected_mask(bg_mask_raw)
+        bg = gray_lin[bg_mask]
+        air_direct = np.zeros((H, W), dtype=bool)
+        air_shadow = np.zeros((H, W), dtype=bool)
+        if bg.size >= 0.005 * gray_lin.size:
+            bg_only = np.where(bg_mask, u8, 0).astype(np.float32)
+            local_mean = cv2.blur(bg_only, (5, 5))
+            local_sq_mean = cv2.blur(bg_only ** 2, (5, 5))
+            local_std = np.sqrt(np.clip(local_sq_mean - local_mean ** 2, 0, None))
+            direct = bg_mask & (local_std > cls.AIR_SHADOW_STD_MAX)
+            if direct.sum() >= 0.005 * gray_lin.size:
+                air_direct = direct
+                air_shadow = bg_mask & ~direct
+            else:
+                air_shadow = bg_mask
+        elif bg_mask_raw.any():
+            air_shadow = bg_mask_raw
+
+        # ---- soft tissue: L4 창(pad=0.6) 안, 유효 조직, 뼈 아닌 곳 ----
+        cx1, cy1, cx2, cy2 = l4_window
+        window = np.zeros((H, W), dtype=bool)
+        window[cy1:cy2, cx1:cx2] = True
+        soft = valid & window & (bone_dil == 0)
+
+        def _pct(mask):
+            vals = gray_lin[mask]
+            return (
+                float(np.percentile(vals, cls.SOFT_TISSUE_PCT))
+                if vals.size >= 50 else None
+            )
+
+        overlay = cv2.cvtColor(
+            (np.clip(gray_lin, 0, 1) * 255).astype(np.uint8), cv2.COLOR_GRAY2RGB
+        )
+        overlay[air_shadow] = (
+            0.55 * overlay[air_shadow] + 0.45 * np.array([40, 40, 160])
+        ).astype(np.uint8)
+        overlay[air_direct] = (
+            0.4 * overlay[air_direct] + 0.6 * np.array([255, 230, 40])
+        ).astype(np.uint8)
+
+        if view == "AP":
+            overlay[soft] = (
+                0.5 * overlay[soft] + 0.5 * np.array([60, 230, 90])
+            ).astype(np.uint8)
+            soft_detail = "AP: pooled"
+        else:
+            split_x = (cx1 + cx2) // 2
+            left = soft.copy(); left[:, split_x:] = False
+            right = soft.copy(); right[:, :split_x] = False
+            left_v, right_v = _pct(left), _pct(right)
+            chosen_is_left = left_v is not None and (right_v is None or left_v <= right_v)
+            chosen, rejected = (left, right) if chosen_is_left else (right, left)
+            overlay[rejected] = (
+                0.5 * overlay[rejected] + 0.5 * np.array([120, 200, 255])
+            ).astype(np.uint8)
+            overlay[chosen] = (
+                0.5 * overlay[chosen] + 0.5 * np.array([60, 230, 90])
+            ).astype(np.uint8)
+            soft_detail = f"{view}: {'left' if chosen_is_left else 'right'} side used"
+
+        for i, poly in enumerate(masks_xy):
+            m = cls._poly_to_mask(poly, H, W, shrink=1.0)
+            cnts, _ = cv2.findContours(
+                m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+            )
+            if i == l4_i:
+                fill = overlay.copy()
+                cv2.drawContours(fill, cnts, -1, (230, 60, 60), -1)
+                overlay = (0.6 * overlay + 0.4 * fill).astype(np.uint8)
+                cv2.drawContours(overlay, cnts, -1, (220, 30, 30), 2)
+            else:
+                cv2.drawContours(overlay, cnts, -1, (80, 160, 255), 1)
+
+        if bar_val is not None and "a_soft" in bar_parts:
+            a_soft = bar_parts["a_soft"]
+            a_air = bar_parts["a_air"]
+            margin = bar_parts["margin"]
+            a_trab = bar_val * margin + a_soft  # bar_score 내부 계산의 역산
+            formula_lines = [
+                "BAR = (A_trab - A_soft) / (A_soft - A_air)",
+                f"= ({a_trab:.4f} - {a_soft:.4f}) / ({a_soft:.4f} - {a_air:.4f}) = {bar_val:.4f}",
+            ]
+        else:
+            formula_lines = ["BAR = n/a (soft/air margin unusable)"]
+
+        # 세로로 긴(portrait) X-ray가 대부분이라 폭이 좁으면 긴 제목/범례/계산식
+        # 줄이 캔버스 밖으로 잘려서 저장된다(뷰어가 아니라 PNG 파일 자체 문제) —
+        # 최소 폭을 넉넉히 주고, 각 줄도 짧게 나눠 어떤 종횡비에서도 안전하게 한다.
+        fig_w = max(7.5, W / H * 7.0)
+        fig, ax = plt.subplots(figsize=(fig_w, 8.6))
+        ax.imshow(overlay)
+        ax.axis("off")
+        ax.set_title(
+            "Reference regions this BAR was computed from\n"
+            "yellow = air (used)   navy = air (shadow, excluded)\n"
+            "green = soft-tissue (used)   sky-blue = soft-tissue (rejected)\n"
+            f"red fill = L4 (target)   [{soft_detail}]",
+            fontsize=9,
+        )
+        n_formula = len(formula_lines)
+        for i, line in enumerate(formula_lines):
+            fig.text(
+                0.5, 0.01 + (n_formula - 1 - i) * 0.028,
+                line, ha="center", va="bottom", fontsize=9, family="monospace",
+            )
+        fig.tight_layout(rect=[0, 0.02 + 0.03 * n_formula, 1, 1])
+        fig.savefig(out_path, dpi=120)
         plt.close(fig)
 
     @classmethod
@@ -982,6 +1123,12 @@ class YoloBmdEngine(BmdInferenceEngine):
     # 연부조직 기준값 분위수. 링 오염은 단측(감쇠를 더하기만) 이므로 하위 분위수가
     # 강건 추정량이다. 25 = 링의 하위 1/4이 순수 연부조직이라고 보는 보수적 설정.
     SOFT_TISSUE_PCT = 25
+    # LA에서 좌/우 후보 차이가 이보다 작으면 '더 낮은 쪽'을 확정 선택하지 않고
+    # 평균을 쓴다 (scripts/debug_soft_tissue_lr_survey.py로 측면 173건 실측:
+    # 28.3%(49건)가 이 문턱 미만 — 어느 쪽을 골라도 의미 없는 차이인데 매번
+    # 이분법으로 한쪽을 확정하면, 재촬영/재분할 때 노이즈만으로 다른 쪽이
+    # 뽑혀 기준값이 흔들릴 수 있다는 리포트로 발견).
+    SOFT_TISSUE_LR_TIE_EPS = 0.02
     QC_MAX_ROI_SATURATED = 0.02   # ROI의 2% 초과가 클리핑 -> 측정 신뢰 불가
     QC_MIN_ROI_PX = 300           # 해면골 ROI가 이보다 작으면 불안정
     # v18 fix: margin 임계값이 못 잡는 경우의 독립적인 방어선. margin이 왜
@@ -1219,11 +1366,40 @@ class YoloBmdEngine(BmdInferenceEngine):
         core = v[(v >= a) & (v <= b)]
         return float(core.mean()) if core.size else float(v.mean())
 
+    @staticmethod
+    def _border_connected_mask(mask: np.ndarray) -> np.ndarray:
+        """mask 중 이미지 테두리에 닿아있는 연결성분만 남긴다.
+
+        진짜 콜리메이션 배경은 항상 프레임 가장자리에서 시작해 몸 쪽으로
+        번져오는 형태다. 반면 장내가스·폐야(허파)처럼 뼈보다 어두운 몸통
+        내부 영역은 Otsu 임계값 하나만으로는 배경과 구분되지 않는다 — 밝기만
+        보면 똑같이 "배경 후보"로 잡힌다. 이 둘의 결정적 차이는 위치다:
+        전자는 테두리에 붙어 있고 후자는 몸통 안에 고립된 섬(island)이다.
+        connectedComponents로 나눈 뒤 이미지 네 변 중 하나라도 닿아있는
+        성분만 남기면, 몸통 내부에 갇힌 성분은 밝기와 무관하게 제외된다
+        (scripts/debug_air_visualize.py로 176장 실측: air 값이 비정상적으로
+        높게 (0.3~0.6대) 나온 파일들은 하나같이 복부 장내가스나 흉곽 늑골
+        사이 영역이 배경으로 오분류된 경우였다 — "종판/disc 대신 air 자체를
+        시각화해보니 몸통 안쪽이 초록(직접노출 판정)으로 찍힌다"는 리포트로
+        발견).
+        """
+        m8 = mask.astype(np.uint8)
+        n, lbl = cv2.connectedComponents(m8, connectivity=8)
+        if n <= 1:
+            return np.zeros_like(mask)
+        border_labels = set(np.unique(lbl[0, :])) | set(np.unique(lbl[-1, :]))
+        border_labels |= set(np.unique(lbl[:, 0])) | set(np.unique(lbl[:, -1]))
+        border_labels.discard(0)
+        if not border_labels:
+            return np.zeros_like(mask)
+        return np.isin(lbl, list(border_labels))
+
     @classmethod
     def _air_reference(cls, gray: np.ndarray) -> float:
-        """직접노출(비감쇠) 배경 레벨. Otsu로 배경을 분리하고, 그 안에서 다시
-        '조준(collimation) 차폐 그림자'와 '진짜 직접노출'을 갈라 후자의
-        25 percentile을 쓴다.
+        """직접노출(비감쇠) 배경 레벨. Otsu로 배경을 분리하고, 테두리에 닿은
+        연결성분만 남긴 뒤(`_border_connected_mask`, 몸통 내부의 장내가스/
+        폐야 오염 배제), 그 안에서 다시 '조준(collimation) 차폐 그림자'와
+        '진짜 직접노출'을 갈라 후자의 25 percentile을 쓴다.
 
         차폐 그림자는 광자가 아예 도달하지 않은 영역이라 평탄하고(국소 표준편차
         ~0), 직접노출은 광자가 도달했으므로 낮은 값이라도 포아송 잡음이
@@ -1235,15 +1411,20 @@ class YoloBmdEngine(BmdInferenceEngine):
         2건 실측: 배경의 67~82%가 그림자, a_air가 0.09~0.14 낮게 잡혀 있었음
         — "측면 BAR가 이유 없이 낮다"는 리포트로 발견).
 
-        직접노출 후보가 전체의 0.5% 미만이면(협착 조준 등, 사실상 진짜 배경이
-        없는 경우) 기존 방식(Otsu 배경 전체의 25 percentile)으로, 그마저도
-        없으면 전체 이미지 1 percentile로 순서대로 폴백한다.
+        테두리-연결성 필터링 후 후보가 전체의 0.5% 미만이면(협착 조준 등,
+        사실상 진짜 배경이 없는 경우) 필터링 전 Otsu 배경 전체의 25
+        percentile로, 그마저도 없으면 전체 이미지 1 percentile로 순서대로
+        폴백한다.
         """
         u8 = (np.clip(gray, 0, 1) * 255).astype(np.uint8)
         thr, _ = cv2.threshold(u8, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        bg_mask = u8 < thr
+        bg_mask_raw = u8 < thr
+        bg_mask = cls._border_connected_mask(bg_mask_raw)
         bg = gray[bg_mask]
         if bg.size < 0.005 * gray.size:
+            bg_fallback = gray[bg_mask_raw]
+            if bg_fallback.size >= 0.005 * gray.size:
+                return float(np.percentile(bg_fallback, 25))
             return float(np.percentile(gray, 1))
 
         bg_only = np.where(bg_mask, u8, 0).astype(np.float32)
@@ -2117,6 +2298,19 @@ class YoloBmdEngine(BmdInferenceEngine):
             f"{output_dir.name}/{xai_bar_l1l5_name}" if xai_bar_l1l5_name else None
         )
 
+        #   4) 기준값 근거: air/연부조직 기준값이 실제로 어느 픽셀에서 왔는지 +
+        #      BAR 계산식을 전체 이미지 위에 표시 (다른 패널과 달리 크롭 안 함).
+        xai_air_soft_name = None
+        try:
+            xai_air_soft_name = "xai_air_soft.png"
+            self._build_air_soft_heatmap(
+                gray_lin, r.masks.xy, l4_i, valid, bone_dil, l4_window, view,
+                bar, bar_parts, str(output_dir / xai_air_soft_name),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("air/연부조직 기준값 히트맵 생성 실패 (생략): %s", exc)
+            xai_air_soft_name = None
+
         # XAI contribution items (statistics-based interpretation)
         xai = self._build_xai(
             bmd_value, mean_d, median_d, std_d, p10, p90, float(confs[l4_i])
@@ -2145,6 +2339,9 @@ class YoloBmdEngine(BmdInferenceEngine):
         xai_l4_cam_path = (
             f"{output_dir.name}/{xai_l4_cam_name}" if xai_l4_cam_name else None
         )
+        xai_air_soft_path = (
+            f"{output_dir.name}/{xai_air_soft_name}" if xai_air_soft_name else None
+        )
 
         return InferenceResult(
             bmd_value=bmd_value,
@@ -2159,6 +2356,7 @@ class YoloBmdEngine(BmdInferenceEngine):
             xai_overlay_path=xai_overlay_path,
             xai_l4_cam_path=xai_l4_cam_path,
             xai_bar_l1l5_path=xai_bar_l1l5_path,
+            xai_air_soft_path=xai_air_soft_path,
             # 밀도 히트맵 스케일 (파랑 끝 / 빨강 끝 / L4 평균)
             density_low=round(low_anchor, 1),
             density_high=round(high_anchor, 1),

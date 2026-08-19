@@ -80,6 +80,7 @@ def _apply_result(study: XrayStudy, result: InferenceResult) -> BmdMeasurement:
         xai_overlay_path=result.xai_overlay_path,
         xai_l4_cam_path=result.xai_l4_cam_path,
         xai_bar_l1l5_path=result.xai_bar_l1l5_path,
+        xai_air_soft_path=result.xai_air_soft_path,
         density_low=result.density_low,
         density_high=result.density_high,
         roi_mean_intensity=result.roi_mean_attenuation,
