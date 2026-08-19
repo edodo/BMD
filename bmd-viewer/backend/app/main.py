@@ -23,6 +23,11 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    # StaticFiles가 마운트 시점에 디렉터리 존재를 확인하므로 lifespan보다 먼저 생성해야 한다
+    # (신규/빈 바인드 마운트로 처음 뜰 때 storage/derived가 아직 없어 죽는 문제 방지).
+    settings.dicom_dir.mkdir(parents=True, exist_ok=True)
+    settings.derived_dir.mkdir(parents=True, exist_ok=True)
+
     app = FastAPI(
         title=settings.app_name,
         lifespan=lifespan,
