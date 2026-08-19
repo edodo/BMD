@@ -10,7 +10,10 @@ services:
       BMD_CORS_ORIGINS: '["http://localhost"]'
       BMD_INFERENCE_DEVICE: "cpu"
     volumes:
-      - bmd-storage:/app/storage
+      # 이름 있는 볼륨 대신 일반 폴더로 마운트 -- 업로드된 DICOM/파생 이미지/DB가
+      # 전부 bmd-viewer/data/ 아래에 그대로 보여서 탐색기에서 바로 확인 가능.
+      # (data/dicom/<patient_id>/<study_id>.dcm 형태로 저장됨)
+      - ./data:/app/storage
       - ./backend/ml_models:/app/ml_models:ro
     ports:
       - "8000:8000"
@@ -23,6 +26,3 @@ services:
     ports:
       - "80:80"
     restart: unless-stopped
-
-volumes:
-  bmd-storage:
