@@ -1,0 +1,62 @@
+{
+  "schema_version": "v18.f1.1",
+  "patient": "declining",
+  "visit": 9,
+  "per_level": {
+    "L1": {
+      "bar": 0.1581729496028288,
+      "bhi": 9.013023954672683,
+      "category": "Low (osteopenia-like)",
+      "qc_status": "PASS",
+      "anomaly_pct": 83.94160583941606,
+      "dBAR_pct_vs_baseline": 0.25514724040853054,
+      "LSC_significant": false,
+      "latent_flagged": false
+    },
+    "L2": {
+      "bar": 0.15158817728772753,
+      "bhi": 11.762667635469516,
+      "category": "Low (osteopenia-like)",
+      "qc_status": "PASS",
+      "anomaly_pct": 94.64720194647202,
+      "dBAR_pct_vs_baseline": -0.06463479805553007,
+      "LSC_significant": false,
+      "latent_flagged": false
+    },
+    "L3": {
+      "bar": 0.12103718826951002,
+      "bhi": 4.050168338335353,
+      "category": "Low (osteopenia-like)",
+      "qc_status": "PASS",
+      "anomaly_pct": 100.0,
+      "dBAR_pct_vs_baseline": -17.21581763401437,
+      "LSC_significant": true,
+      "latent_flagged": true
+    },
+    "L4": {
+      "bar": 0.08822498956599817,
+      "bhi": 4.282950130480378,
+      "category": "Low (osteopenia-like)",
+      "qc_status": "PASS",
+      "anomaly_pct": 100.0,
+      "dBAR_pct_vs_baseline": -17.831846049765375,
+      "LSC_significant": true,
+      "latent_flagged": true
+    },
+    "L5": {
+      "bar": 0.08439982442412537,
+      "bhi": 10.955074184418867,
+      "category": "Low (osteopenia-like)",
+      "qc_status": "PASS",
+      "anomaly_pct": 87.8345498783455,
+      "dBAR_pct_vs_baseline": 2.6280565896152046,
+      "LSC_significant": false,
+      "latent_flagged": false
+    }
+  },
+  "findings": [
+    "L3 fractal↓·contrast↓ 조합으로 AE 이상점수 상승 (100th percentile). BAR도 이미 LSC를 초과하여 유의한 변화로 확인됨.",
+    "L4 fractal↓·correlation↓ 조합으로 AE 이상점수 상승 (100th percentile). BAR도 이미 LSC를 초과하여 유의한 변화로 확인됨."
+  ],
+  "disclaimer": "상대 추세·코호트 z-score·AE 이상점수는 라벨없는 대리지표. 절대 BMD/T-score 아님. Relative trend / cohort z-score / AE anomaly score are label-free proxy indices only -- NOT areal BMD (g/cm2) and NOT a DXA T-score."
+}

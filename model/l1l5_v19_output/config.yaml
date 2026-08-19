@@ -1,0 +1,92 @@
+environment:
+  seed: 42
+  device: cuda
+  yolo_weights: c:\Users\csm02\Desktop\edward\bmd\src\BMD\model\runs\segment\ap_seg\l1_l5_yolo26m_ap_la\weights\best.pt
+  conf: 0.25
+task:
+  class_names:
+  - L1
+  - L2
+  - L3
+  - L4
+  - L5
+  spine_levels:
+  - 0
+  - 1
+  - 2
+  - 3
+  - 4
+  dxa_levels:
+  - 0
+  - 1
+  - 2
+  - 3
+measurement:
+  erode_frac: 0.1
+  endplate_frac: 0.18
+  glcm_levels: 32
+  vario_max_lag: 8
+  fractal_block: 31
+  qc_min_roi_px: 300
+  qc_max_saturated: 0.02
+  qc_min_soft_margin: 0.05
+  qc_min_vert: 3
+  qc_bar_warn_abs: 3.0
+  qc_bar_fail_abs: 6.0
+metal_qc:
+  sat_thresh: 0.99
+  flat_var: 0.0008
+  flat_win: 5
+  min_blob_px: 12
+  halo_px: 2
+  warn_frac: 0.1
+  fail_frac: 0.4
+  soft_metal_warn_frac: 0.05
+reference_bhi:
+  weights:
+    bar: 0.5
+    vario_slope: 0.2
+    fractal_dim: 0.15
+    glcm_homogeneity: 0.075
+    glcm_entropy: 0.075
+  cat_low: -1.0
+  cat_verylow: -2.5
+lsc:
+  repeats: 5
+  jitter:
+    deg: 2.0
+    shift_frac: 0.01
+    scale: 0.02
+autoencoder:
+  feature_cols:
+  - bar
+  - glcm_contrast
+  - glcm_correlation
+  - glcm_energy
+  - glcm_homogeneity
+  - glcm_entropy
+  - vario_slope
+  - fractal_dim
+  n_cohort: 600
+  hidden:
+  - 16
+  - 8
+  latent_dim: 8
+  dropout: 0.1
+  lr: 0.001
+  weight_decay: 0.0001
+  epochs: 150
+  patience: 20
+  batch: 64
+  lr_t0: 30
+  lr_tmult: 2
+  activation: SiLU
+temporal_demo:
+  n_visits: 10
+  repeats_per_visit: 4
+  affected_levels:
+  - L3
+  - L4
+  early_warn_z: 2.0
+  decline_onset_visit: 5
+  decline_rate: 0.05
