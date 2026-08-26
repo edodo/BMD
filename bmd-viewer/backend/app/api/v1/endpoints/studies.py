@@ -12,7 +12,7 @@ from fastapi import (
     HTTPException,
     UploadFile,
 )
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -27,6 +27,7 @@ from app.models import (
     XrayStudy,
 )
 from app.schemas import (
+    StudyDateUpdate,
     StudyNoteUpdate,
     ViewOverrideIn,
     XrayStudyDetail,
@@ -54,14 +55,21 @@ async def list_studies(
     doctor: Doctor = Depends(get_current_doctor),
     db: AsyncSession = Depends(get_db),
 ):
-    """환자의 X-ray 이력 목록 (최신순)."""
+    """환자의 X-ray 이력 목록 (촬영일순 — 지정 안 됐으면 업로드일로 대체).
+
+    acquired_at은 기본적으로 DICOM 메타에서만 채워지지만(추론 완료 후),
+    의사가 PATCH /studies/{id}/date로 직접 지정/수정할 수도 있다. 어느
+    쪽으로도 값이 없으면(추론 전/실패) uploaded_at으로 정렬 — 지금까지의
+    동작(업로드순)과 동일하게 유지.
+    """
     await _assert_owns_patient(db, doctor, patient_id)
+    order_key = func.coalesce(XrayStudy.acquired_at, XrayStudy.uploaded_at)
     studies = (
         await db.scalars(
             select(XrayStudy)
             .where(XrayStudy.patient_id == patient_id)
             .options(selectinload(XrayStudy.measurement))
-            .order_by(XrayStudy.uploaded_at.desc())
+            .order_by(order_key.desc())
         )
     ).all()
     return [
@@ -173,6 +181,35 @@ async def update_study_note(
     study.note_updated_at = datetime.now(timezone.utc)
     await db.commit()
     # 상세 재조회 (관계 포함)
+    study = await db.scalar(
+        select(XrayStudy)
+        .where(XrayStudy.id == study_id)
+        .options(
+            selectinload(XrayStudy.measurement).selectinload(
+                BmdMeasurement.segments
+            ),
+            selectinload(XrayStudy.measurement).selectinload(
+                BmdMeasurement.xai_factors
+            ),
+        )
+    )
+    return study
+
+
+@router.patch("/studies/{study_id}/date", response_model=XrayStudyDetail)
+async def update_study_date(
+    study_id: str,
+    payload: StudyDateUpdate,
+    doctor: Doctor = Depends(get_current_doctor),
+    db: AsyncSession = Depends(get_db),
+):
+    """촬영일(acquired_at) 수동 지정/수정 — History/비교 정렬이 이 값을 따른다."""
+    study = await db.get(XrayStudy, study_id)
+    if not study:
+        raise HTTPException(status_code=404, detail="Study not found")
+    await _assert_owns_patient(db, doctor, study.patient_id)
+    study.acquired_at = payload.acquired_at
+    await db.commit()
     study = await db.scalar(
         select(XrayStudy)
         .where(XrayStudy.id == study_id)

@@ -222,6 +222,14 @@ class BmdMeasurement(Base):
     )
     # 종적 대조용 L4 밀도 격자(N×N, 0..1/None). SQLite엔 JSON(TEXT)로 저장.
     l4_density_grid: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # 위 격자가 쓰는 L4 ROI bbox의 가로/세로 비율 -- 프론트가 격자를 정사각형
+    # 대신 실제 ROI 비율로 그리게 한다(N×N 셀 개수와는 무관).
+    l4_density_grid_aspect: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # 종적 대조(텍스처, "detailed" 모드)용 5구역 텍스처 특징. 셀 단위 격자는
+    # GLCM/fractal/variogram이 통계적으로 의미 없을 만큼 작아지므로, 밀도
+    # 격자와 달리 처음부터 5구역(중앙+네 모서리)으로 계산한다.
+    # {"center"|"top_left"|"top_right"|"bottom_left"|"bottom_right": {feature: value|None}|None}
+    l4_texture_regions: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     computed_at: Mapped[datetime] = mapped_column(
@@ -315,6 +323,48 @@ class XaiFactor(Base):
 
     measurement: Mapped[BmdMeasurement] = relationship(
         back_populates="xai_factors"
+    )
+
+
+class ComparisonType(str, enum.Enum):
+    """저장된 비교의 종류."""
+
+    PRE_POST = "pre_post"
+    MULTI_PATIENT = "multi_patient"
+
+
+class SavedComparison(Base):
+    """저장된 비교 — '무엇을 비교했는지'의 북마크일 뿐, 계산 결과의 스냅샷이
+    아니다. 다시 열면 study/trend 엔드포인트로 최신 데이터를 다시 가져오므로
+    원본 데이터와 어긋날 일이 없다.
+
+    doctor/patient 체인에 속하지 않는 독립 테이블(PrecisionCalibration과 같은
+    이유) — multi_patient 타입은 여러 환자를 가로지르므로 특정 Patient의
+    하위일 수 없고, doctor_id로만 소유권을 판단한다.
+    """
+
+    __tablename__ = "saved_comparisons"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    doctor_id: Mapped[str] = mapped_column(ForeignKey("doctors.id"), index=True)
+    type: Mapped[ComparisonType] = mapped_column(Enum(ComparisonType))
+    title: Mapped[str] = mapped_column(String(120))
+
+    # pre_post 타입에서만 사용
+    patient_id: Mapped[str | None] = mapped_column(
+        ForeignKey("patients.id"), nullable=True, index=True
+    )
+    pre_study_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    post_study_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
+
+    # multi_patient 타입에서만 사용
+    patient_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
+
+    # 표시 옵션 (예: {"contrast": true}) — 재구성 시 그대로 복원
+    config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
     )
 
 

@@ -1,8 +1,9 @@
-// Patient detail: X-ray history list + upload + delete (paged).
+// Patient detail: X-ray history list + upload (multi-file) + date edit + delete (paged).
 import { useEffect, useRef, useState } from "react";
 import {
   useStudies,
   useUploadStudy,
+  useUpdateStudyDate,
   useDeleteStudy,
 } from "@/features/patients/api/queries";
 import { config } from "@/lib/config";
@@ -25,6 +26,79 @@ function fmtDateTime(iso: string): string {
   );
 }
 
+// <input type=datetime-local> value: YYYY-MM-DDTHH:MM
+function fmtDateTimeInput(iso: string): string {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}` +
+    `T${p(d.getHours())}:${p(d.getMinutes())}`
+  );
+}
+
+function extractErrMsg(err: unknown): string {
+  const e = err as { response?: { status?: number; data?: { detail?: string } } };
+  if (e?.response?.status === 413) return "file too large (server limit)";
+  return e?.response?.data?.detail ?? (err as Error)?.message ?? "unknown error";
+}
+
+interface UploadItem {
+  name: string;
+  status: "pending" | "done" | "error";
+  message?: string;
+}
+
+// Inline date editor for a single row (pencil toggle -> date input + save/cancel).
+function DateEditor({ study }: { study: XrayStudyListItem }) {
+  const update = useUpdateStudyDate(study.id);
+  const [editing, setEditing] = useState(false);
+  const shown = study.acquired_at ?? study.uploaded_at;
+  const [value, setValue] = useState(() => fmtDateTimeInput(shown));
+
+  if (!editing) {
+    return (
+      <span className="datetime">
+        {fmtDateTime(shown)}
+        <button
+          className="date-edit-btn"
+          title="Edit acquisition date & time"
+          onClick={(e) => {
+            e.stopPropagation();
+            setValue(fmtDateTimeInput(shown));
+            setEditing(true);
+          }}
+        >
+          🖊
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <span className="datetime date-editing" onClick={(e) => e.stopPropagation()}>
+      <input
+        type="datetime-local"
+        step="1"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+      <button
+        className="date-save-btn"
+        disabled={update.isPending}
+        onClick={() => {
+          if (!value) return;
+          update.mutate(value, { onSuccess: () => setEditing(false) });
+        }}
+      >
+        ✓
+      </button>
+      <button className="date-cancel-btn" onClick={() => setEditing(false)}>
+        ✕
+      </button>
+    </span>
+  );
+}
+
 interface Props {
   patientId: string;
   selectedStudyId?: string;
@@ -42,6 +116,10 @@ export function StudyHistory({
   const upload = useUploadStudy(patientId);
   const del = useDeleteStudy(patientId);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [uploadQueue, setUploadQueue] = useState<UploadItem[]>([]);
+  const uploadPendingCount = uploadQueue.filter((i) => i.status === "pending").length;
+  const uploadStillPending = uploadPendingCount > 0;
+  const uploadErrors = uploadQueue.filter((i) => i.status === "error");
 
   // 페이징 (config.historyPageSize). 환자 전환 시 1페이지로 초기화.
   const [page, setPage] = useState(0);
@@ -54,6 +132,28 @@ export function StudyHistory({
     safePage * pageSize,
     safePage * pageSize + pageSize
   );
+
+  const handleFiles = (files: FileList) => {
+    const list = Array.from(files);
+    if (list.length === 0) return;
+    setUploadQueue(list.map((f) => ({ name: f.name, status: "pending" })));
+    list.forEach((f, idx) => {
+      upload.mutate(f, {
+        onSuccess: () =>
+          setUploadQueue((q) =>
+            q.map((item, i) => (i === idx ? { ...item, status: "done" } : item))
+          ),
+        onError: (err) =>
+          setUploadQueue((q) =>
+            q.map((item, i) =>
+              i === idx
+                ? { ...item, status: "error", message: extractErrMsg(err) }
+                : item
+            )
+          ),
+      });
+    });
+  };
 
   const handleDelete = (e: React.MouseEvent, s: XrayStudyListItem) => {
     e.stopPropagation();
@@ -76,24 +176,38 @@ export function StudyHistory({
           ref={fileRef}
           type="file"
           accept=".dcm,.dicom,application/dicom"
+          multiple
           hidden
           onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) upload.mutate(f);
+            if (e.target.files) handleFiles(e.target.files);
             e.target.value = "";
           }}
         />
       </div>
-      {upload.isPending && <p className="muted">Uploading…</p>}
-      {upload.isError && (
-        <p className="muted" style={{ color: "var(--danger, #d33)" }}>
-          Upload failed:{" "}
-          {(upload.error as any)?.response?.status === 413
-            ? "file too large (server limit)"
-            : (upload.error as any)?.response?.data?.detail ??
-              (upload.error as Error)?.message ??
-              "unknown error"}
+      {uploadQueue.length > 0 && uploadStillPending && (
+        <p className="upload-progress-line">
+          Uploading {uploadQueue.length - uploadPendingCount}/{uploadQueue.length}…
         </p>
+      )}
+      {/* 성공한 업로드는 History가 몇 초 안에 알아서 보여주므로 따로 목록으로
+          안 남긴다. 여기 남기는 건 실패한 것뿐 -- 업로드 자체가 실패하면
+          (413 등) 서버에 레코드가 안 생겨 History엔 아예 안 뜨니, 여기가
+          유일하게 보이는 곳이다. */}
+      {uploadErrors.length > 0 && (
+        <div className="upload-queue-wrap">
+          <ul className="upload-queue">
+            {uploadErrors.map((item, i) => (
+              <li key={`${item.name}-${i}`} className="uq-error">
+                <span className="uq-icon">✕</span>
+                <span className="uq-name" title={item.name}>{item.name}</span>
+                <span className="uq-error-msg">{item.message}</span>
+              </li>
+            ))}
+          </ul>
+          <button className="uq-clear" onClick={() => setUploadQueue([])}>
+            Clear
+          </button>
+        </div>
       )}
       <ul>
         {pageItems.map((s) => (
@@ -103,7 +217,7 @@ export function StudyHistory({
             onClick={() => onSelect(s)}
           >
             <div className="study-row-top">
-              <span className="datetime">{fmtDateTime(s.uploaded_at)}</span>
+              <DateEditor study={s} />
               <button
                 className="row-delete"
                 title="Delete study"

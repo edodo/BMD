@@ -96,6 +96,8 @@ def _apply_lightweight_migrations(conn) -> None:
             "reliable": "BOOLEAN DEFAULT 1",
             "reliability_warning": "TEXT",
             "l4_density_grid": "JSON",
+            "l4_density_grid_aspect": "FLOAT",
+            "l4_texture_regions": "JSON",
         },
     )
     _add_missing(

@@ -22,7 +22,9 @@ from app.services.inference.engine import (
     InferenceResult,
     PartialInferenceError,
     get_engine,
+    run_blocking,
 )
+from app.services.precision_calibration import schedule_auto_calibration
 
 
 async def _delete_existing_measurement(db: AsyncSession, study_id: str) -> None:
@@ -87,6 +89,8 @@ def _apply_result(study: XrayStudy, result: InferenceResult) -> BmdMeasurement:
         reliable=result.reliable,
         reliability_warning=result.reliability_warning,
         l4_density_grid=result.l4_density_grid,
+        l4_density_grid_aspect=result.l4_density_grid_aspect,
+        l4_texture_regions=result.l4_texture_regions,
         model_version=result.model_version,
     )
     measurement.segments = [
@@ -144,7 +148,8 @@ async def process_study(study_id: str) -> None:
         try:
             engine = get_engine()
             out_dir = settings.derived_dir / study_id
-            result = engine.run(
+            result = await run_blocking(
+                engine.run,
                 dicom_path=settings.dicom_dir / study.dicom_path,
                 output_dir=out_dir,
             )
@@ -152,6 +157,12 @@ async def process_study(study_id: str) -> None:
             db.add(measurement)
             study.status = StudyStatus.COMPLETED
             await db.commit()
+            # 이 스터디가 완료됐으니 정밀도(LSC) 자동 재보정을 예약한다. 여러
+            # 파일을 한꺼번에 업로드하면 각각의 process_study가 거의 동시에
+            # 끝나는데, 그때마다 바로 재보정을 돌리면 업로드가 진행되는 도중에
+            # 여러 번 겹쳐 돈다 -- schedule_auto_calibration은 디바운스돼 있어
+            # 마지막 완료로부터 일정 시간 조용해진 뒤 딱 한 번만 실행된다.
+            schedule_auto_calibration()
 
         except PartialInferenceError as exc:
             # L4 측정은 실패했지만 원본/추출 오버레이는 살려서 화면에 보여준다.
@@ -186,7 +197,8 @@ async def recompute_view(db: AsyncSession, study: XrayStudy, view: str) -> None:
     """
     engine = get_engine()
     out_dir = settings.derived_dir / study.id
-    result = engine.run(
+    result = await run_blocking(
+        engine.run,
         dicom_path=settings.dicom_dir / study.dicom_path,
         output_dir=out_dir,
         view_override=view,

@@ -5,12 +5,14 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: var(--text); background: var(--bg); }
+  color: var(--text); background: var(--bg); line-height: 1.5; }
 .app-shell { height: 100vh; display: flex; flex-direction: column; }
 .topbar { height: 52px; background: var(--panel); border-bottom: 1px solid var(--border);
-  display: flex; align-items: baseline; gap: 12px; padding: 0 20px; }
+  display: flex; align-items: center; gap: 12px; padding: 0 20px; }
 .brand { font-weight: 700; font-size: 16px; }
 .subtitle { color: var(--muted); font-size: 13px; }
+.current-user { color: var(--text); font-size: 13px; font-weight: 600; }
+.topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .dashboard { flex: 1; display: grid; grid-template-columns: 280px 360px 1fr; overflow: hidden; }
 .col { overflow-y: auto; border-right: 1px solid var(--border); padding: 16px; }
 .muted { color: var(--muted); font-size: 13px; }
@@ -26,17 +28,25 @@ body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 .patient-header { display: flex; align-items: flex-start; justify-content: space-between;
   gap: 8px; }
 .patient-header h2 { margin: 0 0 2px; }
-.compare-toggle { padding: 6px 10px; font-size: 12px; border: 1px solid var(--border);
-  background: var(--panel); border-radius: 7px; cursor: pointer; white-space: nowrap; }
-.compare-toggle.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+/* 기본(닫힘) 상태: 파란 외곽선 + 파란 글씨 (흰 배경에 흰 글씨로 안 보이던 버그 수정).
+   열림(닫기) 상태: 파랑과 헷갈리지 않게 슬레이트 그레이로 채워서 "닫기"임을 구분. */
+.compare-toggle { padding: 6px 10px; font-size: 12px; border: 1px solid var(--accent);
+  background: var(--panel); color: var(--accent); border-radius: 7px; cursor: pointer;
+  white-space: nowrap; }
+.compare-toggle:hover { background: #eff6ff; }
+.compare-toggle.active { background: #475569; color: #fff; border-color: #475569; }
+.compare-toggle.active:hover { background: #334155; }
 
 /* ---------- 종적 대조(Compare) 뷰 ---------- */
 .compare-view { height: 100%; overflow-y: auto; padding-right: 6px; }
+/* 제목 줄과 액션 묶음을 분리 -- 좁은 폭에서는 액션 묶음 전체가 한 덩어리로
+   다음 줄로 넘어가고(각 버튼이 따로따로 흩어지지 않음), 넓은 폭에서는 한 줄. */
 .cmp-toolbar { display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; }
+  gap: 12px 16px; flex-wrap: wrap; }
 .cmp-toolbar h3 { margin: 0; font-size: 16px; }
+.cmp-toolbar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .cmp-contrast { display: flex; align-items: center; gap: 6px; font-size: 13px;
-  color: var(--text); }
+  color: var(--text); white-space: nowrap; }
 .cmp-pickers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
   margin: 12px 0 16px; }
 .cmp-picker { border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
@@ -44,8 +54,9 @@ body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 .cmp-picker ul { list-style: none; margin: 0; padding: 0; max-height: 180px;
   overflow-y: auto; }
 .cmp-picker li { margin: 0; }
-.cmp-picker label { display: flex; align-items: center; gap: 8px; padding: 4px 2px;
-  font-size: 13px; cursor: pointer; }
+.cmp-picker label { display: flex; align-items: center; gap: 8px; padding: 8px 6px;
+  font-size: 13px; cursor: pointer; border-radius: 6px; }
+.cmp-picker label:hover { background: #f1f5f9; }
 .cmp-picker label .muted { margin-left: auto; }
 
 .cmp-strip { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px;
@@ -68,18 +79,37 @@ body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 .cmp-empty, .cmp-picker + .cmp-empty { color: var(--muted); padding: 24px 0;
   text-align: center; }
 
-/* 골손실 격자 (post−pre 음수 셀을 붉게) */
-.bone-loss { margin-top: 2px; }
-.bone-loss-grid { display: grid; width: 100%; aspect-ratio: 1 / 1;
-  border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
-  background: #f8fafc; }
-.bone-loss-grid span { border-right: 1px solid rgba(148,163,184,0.15);
-  border-bottom: 1px solid rgba(148,163,184,0.15); }
-.bone-loss-cap { margin: 5px 0 0; font-size: 10px; color: var(--muted); }
+/* 픽셀 단위 밀도 diff (서버가 matplotlib으로 렌더링한 PNG, density-diff.png) */
+.density-diff { margin-top: 8px; }
+.density-diff-img { background: #f8fafc; }
+.bone-loss-cap { margin: 6px 0 0; font-size: 11px; color: var(--muted); }
+.cmp-delta { margin-left: 6px; font-weight: 700; font-size: 11px; }
+.cmp-delta.up { color: #16a34a; }
+.cmp-delta.down { color: var(--target); }
+
+/* ---------- 5구역 종적 대조 격자 (밀도 + 텍스처 detailed 공용) ---------- */
+.region-grid-wrap { margin-top: 10px; }
+.region-grid { display: grid; grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr); gap: 4px; width: 100%; aspect-ratio: 1 / 1; }
+.region-cell { display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 2px; border-radius: 6px; border: 1px solid var(--border);
+  padding: 4px; text-align: center; background: #f8fafc; }
+.region-label { font-size: 10px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .02em; }
+.region-pct { font-size: 12px; font-weight: 700; }
+.region-loss { background: rgba(37,99,235,0.14); border-color: rgba(37,99,235,0.35); }
+.region-loss .region-pct { color: #1d4ed8; }
+.region-gain { background: rgba(220,38,38,0.12); border-color: rgba(220,38,38,0.35); }
+.region-gain .region-pct { color: #b91c1c; }
+.region-flat .region-pct { color: var(--muted); }
 .study-history .toolbar { display: flex; align-items: center; gap: 8px; margin: 16px 0 8px; }
 .study-history .toolbar h3 { margin: 0; flex: 1; font-size: 14px; }
 button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
   border-radius: 6px; cursor: pointer; font-size: 13px; }
+/* 비활성 버튼이 여전히 클릭 가능해 보이는 문제(색이 그대로라 disabled인 줄
+   모름) -- 전 앱 공통으로 흐리게 + 커서 변경. 개별 클래스가 이미 자기만의
+   :disabled 룰을 갖고 있으면(.pager button 등) 그쪽이 우선한다. */
+button:disabled { opacity: 0.45; cursor: not-allowed; }
 .study-history li { display: flex; flex-direction: column; gap: 5px; padding: 9px 8px;
   border-radius: 6px; cursor: pointer; font-size: 13px; }
 .study-history li:hover { background: #f1f5f9; }
@@ -181,16 +211,14 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
 
 /* L4 ROI BAR 히트맵: 컬러바/스케일이 이미지 자체(matplotlib)에 그려져 있으므로
    별도 DOM 게이지 없이 캡션 한 줄만 붙인다. */
-.density-basis .desc { color: var(--muted); font-size: 11px; margin: 10px 0 0;
-  line-height: 1.5; }
+.density-basis .desc { color: var(--muted); font-size: 11px; margin: 10px 0 0; }
 
 /* air/연부조건 기준값 근거: 전체 이미지를 보여줘야 해서(air는 대개 가장자리,
    연부조직 링은 L4 옆) l4-density-row의 좁은 2단 레이아웃엔 안 넣고 그 아래
    전체 폭으로 배치한다. */
 .air-soft-basis { margin-top: 20px; }
 .air-soft-basis h4 { margin: 0 0 8px; font-size: 14px; }
-.air-soft-basis .desc { color: var(--muted); font-size: 11px; margin: 10px 0 0;
-  line-height: 1.5; }
+.air-soft-basis .desc { color: var(--muted); font-size: 11px; margin: 10px 0 0; }
 
 .trend { margin-top: 20px; padding: 14px; background: var(--panel);
   border: 1px solid var(--border); border-radius: 10px; }
@@ -238,8 +266,8 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
 /* ---------- History 페이저 ---------- */
 .pager { display: flex; align-items: center; justify-content: center; gap: 10px;
   margin-top: 8px; }
-.pager button { padding: 4px 10px; font-size: 12px; border: 1px solid var(--border);
-  background: var(--panel); border-radius: 6px; cursor: pointer; }
+.pager button { padding: 4px 10px; font-size: 12px; border: 0;
+  background: var(--accent); color: #fff; border-radius: 6px; cursor: pointer; }
 .pager button:disabled { opacity: 0.4; cursor: default; }
 .pager-info { font-size: 12px; color: var(--muted); }
 
@@ -284,10 +312,8 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
 .auth-error { color: #dc2626; font-size: 13px; margin: 2px 0 0; }
 
 /* ---------- 상단바 로그아웃 ---------- */
-.topbar { position: relative; }
-.logout-btn { position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
-  background: transparent; color: var(--muted); border: 1px solid var(--border);
-  padding: 6px 12px; font-size: 13px; }
+.logout-btn { background: transparent; color: var(--muted); border: 1px solid var(--border);
+  padding: 6px 12px; font-size: 13px; border-radius: 6px; }
 .logout-btn:hover { background: #f1f5f9; color: var(--text); }
 
 /* ---------- 환자 리스트 헤더 + 등록 버튼 ---------- */
@@ -304,7 +330,9 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
 .modal-header { display: flex; align-items: center; justify-content: space-between;
   padding: 16px 20px; border-bottom: 1px solid var(--border); }
 .modal-header h3 { margin: 0; font-size: 16px; }
-.modal-close { background: transparent; color: var(--muted); font-size: 16px; padding: 2px 6px; }
+.modal-close { background: transparent; color: var(--muted); font-size: 16px; padding: 2px 6px;
+  border-radius: 5px; }
+.modal-close:hover { background: #f1f5f9; color: var(--text); }
 
 /* ---------- 이미지 라이트박스 (클릭해서 크게 보기) ---------- */
 .lightbox-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,.78);
@@ -329,6 +357,12 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
   border-top: 1px solid var(--border); }
 .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
 .btn-ghost:hover { background: #f1f5f9; }
+/* 보조 액션(자주 안 쓰는 토글류: Texture 팝업, Saved 목록 등) -- 매번 같은
+   진한 파랑이 여러 개 나란히 있으면 뭐가 중요한지 안 보인다. 강조색 글자 +
+   테두리만으로 톤을 낮춰서, 진짜 커밋하는 동작(Save 등)만 꽉 찬 파랑으로
+   남게 한다. */
+.btn-secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+.btn-secondary:hover { background: var(--accent); color: #fff; }
 
 /* ---------- L4 crop block ---------- */
 .l4-crop-block { margin-top: 16px; }
@@ -429,3 +463,114 @@ button { background: var(--accent); color: #fff; border: 0; padding: 7px 12px;
 @media (prefers-reduced-motion: reduce) {
   .glow-panel::before { animation: none; }
 }
+
+/* ---------- 모달 크기 변형 (Modal.tsx) ---------- */
+.modal-wide { width: 640px; max-width: 90vw; }
+.modal-xwide { width: 920px; max-width: 92vw; }
+.modal-body { max-height: 70vh; overflow-y: auto; }
+
+/* ---------- History: 촬영일 인라인 편집 ---------- */
+.date-edit-btn { background: transparent; color: #94a3b8; border: 0; padding: 0 0 0 6px;
+  font-size: 11px; cursor: pointer; line-height: 1; }
+.date-edit-btn:hover { color: var(--accent); }
+.date-editing { display: flex; align-items: center; gap: 4px; }
+.date-editing input[type="datetime-local"] { font-size: 12px; padding: 2px 4px; border: 1px solid var(--border);
+  border-radius: 4px; }
+.date-save-btn, .date-cancel-btn { padding: 1px 6px; font-size: 11px; border-radius: 4px; }
+.date-cancel-btn { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+
+/* ---------- History: 다중 업로드 진행 상태 ---------- */
+/* 업로드 중엔 한 줄 요약만 -- 성공한 파일은 몇 초 안에 History 목록이 알아서
+   보여주므로 따로 항목별로 남기지 않는다. */
+.upload-progress-line { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+/* 업로드 자체가 실패한 파일만 남긴다 (서버에 레코드가 안 생겨 History엔 아예
+   안 뜨는 유일한 경우이므로 여기가 유일하게 보이는 곳). */
+.upload-queue-wrap { margin: 0 0 10px; }
+.upload-queue { list-style: none; margin: 0 0 4px; padding: 0; display: flex;
+  flex-direction: column; gap: 3px; }
+.upload-queue li { display: flex; align-items: center; gap: 6px; font-size: 11.5px;
+  padding: 3px 6px; border-radius: 5px; background: #fef2f2; }
+.uq-icon { width: 14px; text-align: center; font-weight: 700; color: var(--target); }
+.uq-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+.uq-error-msg { color: var(--target); margin-left: auto; font-size: 10.5px; }
+.uq-clear { background: transparent; color: var(--muted); border: 1px solid var(--border);
+  padding: 2px 8px; font-size: 10.5px; border-radius: 5px; }
+
+/* ---------- Texture 비교 팝업 (simple/detailed) ---------- */
+.texcmp-note { margin-top: 0; }
+.texcmp-easy-scroll { overflow-x: auto; }
+.texcmp-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.texcmp-table th, .texcmp-table td { padding: 6px 10px; border-bottom: 1px solid var(--border);
+  text-align: left; white-space: nowrap; }
+.texcmp-table th { color: var(--muted); font-weight: 600; font-size: 11px; }
+.texcmp-delta { font-weight: 700; font-size: 11px; }
+.texcmp-delta.up { color: #16a34a; }
+.texcmp-delta.down { color: var(--target); }
+.texcmp-hard-panels { display: flex; flex-direction: column; gap: 18px; }
+.texcmp-hard-panel h4 { margin: 0 0 6px; font-size: 13px; }
+.texcmp-hard-grid { aspect-ratio: auto; grid-template-rows: repeat(3, minmax(70px, auto)); }
+.texcmp-hard-cell { align-items: stretch; text-align: left; padding: 6px 8px; }
+.texcmp-hard-cell .region-label { text-align: center; margin-bottom: 2px; }
+.texcmp-hard-features { list-style: none; margin: 0; padding: 0; display: flex;
+  flex-direction: column; gap: 2px; }
+.texcmp-hard-features li { display: flex; justify-content: space-between; gap: 8px;
+  font-size: 10.5px; }
+.texcmp-hard-flabel { color: var(--muted); }
+.texcmp-insufficient { font-size: 10.5px; color: var(--muted); font-style: italic;
+  margin: auto; }
+
+/* ---------- 저장된 비교 ---------- */
+.saved-cmp-list { list-style: none; margin: 0; padding: 0; display: flex;
+  flex-direction: column; gap: 6px; }
+.saved-cmp-list li { display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.saved-cmp-title { font-weight: 600; font-size: 13px; }
+.saved-cmp-meta { color: var(--muted); font-size: 11px; margin-top: 2px; }
+.saved-cmp-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.saved-cmp-delete { background: transparent; color: #94a3b8; border: 1px solid var(--border);
+  padding: 5px 9px; }
+.saved-cmp-delete:hover { color: var(--target); background: #fef2f2; border-color: #fecaca; }
+
+/* ---------- 대시보드 셸 (환자 비교 전환은 App.tsx 상단바로 이동) ---------- */
+.dashboard-shell { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ---------- 다중 환자 BMD 비교 ---------- */
+.mpcmp-view { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.mpcmp-toolbar { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.mpcmp-toolbar h3 { margin: 0; font-size: 16px; }
+.mpcmp-toolbar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mpcmp-body { display: grid; grid-template-columns: 280px 1fr; gap: 20px; }
+.mpcmp-picker { border: 1px solid var(--border); border-radius: 10px; padding: 10px;
+  align-self: start; }
+.mpcmp-picker ul { list-style: none; margin: 0; padding: 0; max-height: 60vh;
+  overflow-y: auto; }
+.mpcmp-picker label { display: flex; align-items: center; gap: 8px; padding: 8px 6px;
+  font-size: 13px; cursor: pointer; border-radius: 6px; }
+.mpcmp-picker label:hover { background: #f1f5f9; }
+.mpcmp-picker label .muted { margin-left: auto; font-size: 11px; }
+.mpcmp-chart-col { min-width: 0; }
+/* 환자별 X-ray 선택 (선택된 환자마다 자기 스터디 목록에서 비교에 포함할 것만 고름) */
+.mpcmp-study-pickers { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.mpcmp-study-picker { flex: 1 1 200px; border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; max-height: 180px; overflow-y: auto; }
+.mpcmp-study-picker-head { font-weight: 700; font-size: 12.5px; margin-bottom: 4px; }
+/* 라디오(Ref)/체크박스(Include) 열이 각 행에서 뭘 뜻하는지 툴팁 없이도
+   보이도록 하는 열 제목 줄. */
+.mpcmp-study-picker-cols { display: flex; gap: 6px; align-items: center;
+  font-size: 9.5px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .03em; margin-bottom: 2px; padding: 0 6px; }
+.mpcmp-study-picker-cols .col-ref { width: 15px; text-align: center; }
+.mpcmp-study-picker-cols .col-inc { width: 15px; text-align: center; }
+.mpcmp-study-picker ul { list-style: none; margin: 0; padding: 0; }
+.mpcmp-study-picker label { display: flex; align-items: center; gap: 6px; padding: 6px;
+  font-size: 11.5px; cursor: pointer; border-radius: 5px; }
+.mpcmp-study-picker label:hover { background: #f1f5f9; }
+.mpcmp-study-picker label .muted { margin-left: auto; font-size: 10.5px; }
+/* 라디오(기준)+체크박스(비교 포함)를 한 줄에 -- 기본 gap보다 라디오/체크박스
+   사이는 좁게 붙여서 하나의 "선택 위젯"처럼 보이게 한다. */
+.mpcmp-ref { gap: 4px !important; }
+.mpcmp-ref input[type="checkbox"] { margin-left: 2px; }
+/* 다중 환자 비교 카드 위에 얹는 환자명 라벨 (같은 환자 시간축 비교엔 없음) */
+.cmp-patient-label { font-size: 11px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .02em; margin-bottom: 4px; }

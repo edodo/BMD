@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DashboardPage } from "./DashboardPage";
 import { AuthProvider, useAuth } from "@/features/auth/AuthContext";
@@ -9,7 +10,8 @@ const queryClient = new QueryClient({
 });
 
 function AppContent() {
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, doctor, logout } = useAuth();
+  const [comparePatients, setComparePatients] = useState(false);
 
   if (!isAuthenticated) {
     return <LoginPage />;
@@ -20,11 +22,20 @@ function AppContent() {
       <header className="topbar">
         <span className="brand">BMD Viewer</span>
         <span className="subtitle">BMD Result Viewer</span>
-        <button className="logout-btn" onClick={logout}>
-          Logout
-        </button>
+        {doctor && <span className="current-user">{doctor.full_name}</span>}
+        <div className="topbar-actions">
+          <button
+            className={`compare-toggle${comparePatients ? " active" : ""}`}
+            onClick={() => setComparePatients((v) => !v)}
+          >
+            {comparePatients ? "✕ Close" : "⇄ Compare patients"}
+          </button>
+          <button className="logout-btn" onClick={logout}>
+            Logout
+          </button>
+        </div>
       </header>
-      <DashboardPage />
+      <DashboardPage comparePatients={comparePatients} />
     </div>
   );
 }

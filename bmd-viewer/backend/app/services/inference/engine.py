@@ -12,8 +12,10 @@
 from __future__ import annotations
 
 import abc
+import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, Callable
 
 
 @dataclass
@@ -84,6 +86,12 @@ class InferenceResult:
     roi_mean_attenuation: float | None = None
     # 종적 대조용 L4 밀도 격자(N×N, 0..1 또는 None). post−pre로 골손실 부위 검출.
     l4_density_grid: list | None = None
+    # l4_density_grid가 쓰는 L4 ROI bbox의 가로/세로 비율 -- 프론트가 격자를
+    # 정사각형이 아니라 실제 ROI 비율로 그리도록(위 L4 크롭 이미지와 비율을
+    # 맞추기 위함). 격자 자체의 셀 개수(N×N)와는 무관한 값.
+    l4_density_grid_aspect: float | None = None
+    # 종적 대조(텍스처, "detailed" 모드)용 5구역 텍스처 특징(중앙+네 모서리).
+    l4_texture_regions: dict | None = None
     # 측정 신뢰도: 대상 척추가 이미지 경계에 잘렸거나(truncated) 부적합 영상이면
     # reliable=False, reliability_warning에 사유. 값은 유지하되 프론트에서 경고.
     reliable: bool = True
@@ -198,6 +206,20 @@ class StubBmdEngine(BmdInferenceEngine):
             view_position=view_override or "AP",
             view_source="manual" if view_override else "auto",
         )
+
+
+# engine.run()/measure_precision() 등은 전부 동기(블로킹) 함수라 그대로
+# await 없이 부르면 이 프로세스의 단일 asyncio 이벤트 루프가 통째로 막힌다
+# (multi-upload "Pending" 정체의 원인이었던 문제와 동일). 엔진을 부르는 모든
+# 호출자(추론 워커, 정밀도 보정 등)가 이 헬퍼 하나로 asyncio.to_thread +
+# 락 직렬화를 공유해야 싱글톤 엔진 인스턴스를 여러 스레드가 동시에 건드리는
+# 사고를 막는다.
+_ENGINE_LOCK = asyncio.Lock()
+
+
+async def run_blocking(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    async with _ENGINE_LOCK:
+        return await asyncio.to_thread(fn, *args, **kwargs)
 
 
 _engine_singleton: BmdInferenceEngine | None = None

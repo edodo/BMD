@@ -1900,14 +1900,24 @@ class YoloBmdEngine(BmdInferenceEngine):
         x0, x1 = int(xs.min()), int(xs.max()) + 1
         score = np.clip((dens - low) / max(high - low, 1e-6), 0.0, 1.0)
         sel = (mask > 0) & valid
-        y_edges = np.linspace(y0, y1, n + 1).astype(int)
-        x_edges = np.linspace(x0, x1, n + 1).astype(int)
+        # ROI 픽셀 높이/너비가 n보다 작으면(작은 크롭에 n=30 격자를 씌우는 경우),
+        # linspace를 그대로 int로 자를 때 연속된 경계값이 같은 정수로 뭉개져
+        # 폭 0인 셀이 생긴다 -- 그 셀은 항상 빈 셀(None/흰색)이 되고, 뭉개짐이
+        # 규칙적인 간격으로 반복돼 빨간줄/흰줄이 번갈아 나오는 줄무늬로 보였다
+        # (사용자 리포트로 발견). 각 셀이 최소 1픽셀은 갖도록 보장해 해결한다
+        # -- ROI가 실제로 n보다 작을 땐 인접 셀끼리 픽셀을 일부 공유하게 되지만
+        # (실제 해상도보다 세밀하게 요청했으니 불가피), 최소한 실제 데이터가
+        # 있는데도 빈 셀로 잘못 표시되는 일은 없다.
+        y_edges = np.linspace(y0, y1, n + 1)
+        x_edges = np.linspace(x0, x1, n + 1)
         grid: list[list[float | None]] = []
         for r in range(n):
+            cy0 = int(round(y_edges[r]))
+            cy1 = min(y1, max(cy0 + 1, int(round(y_edges[r + 1]))))
             row: list[float | None] = []
             for c in range(n):
-                cy0, cy1 = y_edges[r], y_edges[r + 1]
-                cx0, cx1 = x_edges[c], x_edges[c + 1]
+                cx0 = int(round(x_edges[c]))
+                cx1 = min(x1, max(cx0 + 1, int(round(x_edges[c + 1]))))
                 cell = sel[cy0:cy1, cx0:cx1]
                 if cell.any():
                     vals = score[cy0:cy1, cx0:cx1][cell]
@@ -1916,6 +1926,81 @@ class YoloBmdEngine(BmdInferenceEngine):
                     row.append(None)
             grid.append(row)
         return grid
+
+    @staticmethod
+    def _mask_aspect_ratio(mask: np.ndarray) -> float | None:
+        """`_density_grid`가 쓰는 것과 동일한 bbox의 가로/세로 비율(width/height).
+
+        격자는 항상 N×N(정사각 배열)로 리샘플되지만, 실제 L4 ROI bbox는
+        보통 척추체 특성상 가로가 더 긴 직사각형이다. 프론트가 격자를
+        정사각형으로만 그리면 위에 보이는 L4 크롭/히트맵 이미지와 비율이
+        어긋나 보이므로, 이 값을 같이 내려줘서 격자 컨테이너의 종횡비를
+        실제 ROI에 맞춘다.
+        """
+        ys, xs = np.where(mask > 0)
+        if ys.size == 0:
+            return None
+        h = int(ys.max()) - int(ys.min()) + 1
+        w = int(xs.max()) - int(xs.min()) + 1
+        if h <= 0:
+            return None
+        return round(w / h, 3)
+
+    # 5구역 종적 대조(밀도 프론트 재집계 + 텍스처 detailed 모드)가 공유하는
+    # 분할 규칙. bbox 기준 정규화 위치 (fx,fy) in [0,1]에서, 중앙 50%x50%는
+    # "center", 나머지는 fx<0.5/fy<0.5로 결정되는 사분면. 프론트엔드
+    # regions.ts의 동일 규칙과 반드시 일치해야 두 화면이 같은 "중앙"을 뜻한다.
+    REGION_NAMES = ("center", "top_left", "top_right", "bottom_left", "bottom_right")
+    TEXTURE_REGION_MIN_PX = 40  # 이보다 작은 구역은 GLCM/fractal이 무의미 -> None
+
+    @classmethod
+    def _five_region_masks(cls, mask: np.ndarray) -> dict[str, np.ndarray]:
+        """`mask`(bool/0-1 배열)를 bbox 기준 5구역(중앙+네 모서리)으로 나눈다.
+
+        반환값의 각 구역 마스크는 `mask`와 같은 shape의 bool 배열이며, 이미
+        `mask` 자체와 AND된 상태다(빈 마스크는 all-False).
+        """
+        ys, xs = np.where(mask > 0)
+        if ys.size == 0:
+            return {name: np.zeros_like(mask, dtype=bool) for name in cls.REGION_NAMES}
+        y0, y1 = int(ys.min()), int(ys.max())
+        x0, x1 = int(xs.min()), int(xs.max())
+        h = max(y1 - y0, 1)
+        w = max(x1 - x0, 1)
+        yy, xx = np.mgrid[0 : mask.shape[0], 0 : mask.shape[1]]
+        fy = (yy - y0) / h
+        fx = (xx - x0) / w
+        base = mask > 0
+        is_center = (fx >= 0.25) & (fx <= 0.75) & (fy >= 0.25) & (fy <= 0.75)
+        regions = {"center": base & is_center}
+        rest = base & ~is_center
+        regions["top_left"] = rest & (fx < 0.5) & (fy < 0.5)
+        regions["top_right"] = rest & (fx >= 0.5) & (fy < 0.5)
+        regions["bottom_left"] = rest & (fx < 0.5) & (fy >= 0.5)
+        regions["bottom_right"] = rest & (fx >= 0.5) & (fy >= 0.5)
+        return regions
+
+    @classmethod
+    def _texture_regions(cls, gray_lin: np.ndarray, texture_mask: np.ndarray) -> dict:
+        """L4 텍스처를 5구역으로 나눠 각각 계산 (종적 대조 "detailed" 모드용).
+
+        BHI가 이미 쓰는 4개 특징(glcm_homogeneity/entropy, vario_slope,
+        fractal_dim)만 담는다 — 팝업을 읽기 쉽게 유지하려는 의도. 픽셀 수가
+        TEXTURE_REGION_MIN_PX 미만인 구역은 통계적으로 무의미하므로 전부 None.
+        """
+        out: dict = {}
+        for name, rmask in cls._five_region_masks(texture_mask).items():
+            if int(rmask.sum()) < cls.TEXTURE_REGION_MIN_PX:
+                out[name] = None
+                continue
+            t = cls._compute_texture(gray_lin, rmask)
+            out[name] = {
+                "glcm_homogeneity": t.get("glcm_homogeneity"),
+                "glcm_entropy": t.get("glcm_entropy"),
+                "vario_slope": t.get("vario_slope"),
+                "fractal_dim": t.get("fractal_dim"),
+            }
+        return out
 
     # ---------- 메인 ----------
     def run(
@@ -2122,20 +2207,38 @@ class YoloBmdEngine(BmdInferenceEngine):
                     bar_i, bar_parts_i, trab_roi_i, crop_box_i
                 )
                 l4_qc_message = qc_message_i
+                texture_regions = self._texture_regions(gray_lin, texture_mask)
 
         # 금속 자체는 신뢰성 있게 검출하지 못한다(밝기·형태 휴리스틱 모두 실측에서
         # 실패). _vertebra_qc()가 이미 'ROI가 포화됐다 = 값이 잘렸다' 등 객관적으로
         # 측정 가능한 것만으로 L4 QC를 판정했으므로, 그 결과를 study 신뢰도에 반영.
         qc_msgs: list[str] = [f"L4: {l4_qc_message}"] if l4_qc_message else []
         bar_fallback = bar is None
-        # 밀도 히트맵/격자는 '원시 감쇠(dens)' 픽셀을 색칠한다. 따라서 스케일 앵커도
-        # 반드시 같은 원시 도메인이어야 한다. BAR 단위(0~0.4)를 넣으면 raw 값(수천)이
-        # 상한을 수천 배 초과해 ROI 전체가 최대색으로 포화된다(v17 초기 버그).
-        # -> bmd_value만 BAR로 바꾸고, 시각화 스케일은 기존 원시 도메인을 유지한다.
+        # 게이지 마커(roi_marker)는 여전히 '원시 감쇠(dens)' 스케일을 쓴다 —
+        # BAR 단위(0~0.4)를 넣으면 raw 값(수천)이 상한을 수천 배 초과해 ROI
+        # 전체가 최대색으로 포화된다(v17 초기 버그).
         low_anchor, high_anchor = self._density_scale(
             dens, valid, l4_window, bone_dil, vals,
         )
-        grid_src = dens
+        # 종적 대조 격자(l4_density_grid)는 반드시 BAR와 같은 축을 써야 한다.
+        # 예전엔 여기도 dens/low_anchor/high_anchor(스터디마다 다시 잡는 로컬
+        # percentile)를 썼는데, 이건 노출/게인에 따라 스터디마다 스케일이
+        # 달라 두 스터디를 빼면 실제 변화가 상쇄돼 버린다 -- 실측 사례: 같은
+        # 환자 BAR가 0.288->0.955(+231%)로 뛰었는데 grid 평균은 0.55->0.47로
+        # 거의 그대로였다(각자 자기 이미지 안에서의 상대적 위치만 반영하므로).
+        # bar_map = (A-a_soft)/margin은 BAR 본식과 동일한 아핀 불변 축이라
+        # 스터디 간에 곧바로 뺄셈이 가능하다 -- xai_density.png 히트맵도 이미
+        # 이 축(BAR_COLOR_VMIN..VMAX 고정 스케일)으로 그려지므로, 격자도 같은
+        # 것을 쓰면 화면에 보이는 히트맵 색과 격자 대조가 서로 어긋나지 않는다.
+        bar_map = bar_parts.get("bar_map") if not bar_fallback else None
+        if bar_map is not None:
+            grid_src = bar_map
+            grid_low, grid_high = self.BAR_COLOR_VMIN, self.BAR_COLOR_VMAX
+        else:
+            # BAR 실패 시에만 예전 방식으로 폴백(신뢰도는 이미 아래에서 False로
+            # 표시된다).
+            grid_src = dens
+            grid_low, grid_high = low_anchor, high_anchor
         if not bar_fallback:
             bmd_value = bar
         else:
@@ -2165,10 +2268,15 @@ class YoloBmdEngine(BmdInferenceEngine):
             )
             reliable = False
             logger.info("QC 경고 (%s): %s", dicom_path.name, joined)
-        # 종적 대조용 L4 밀도 격자 (post−pre로 골손실 부위 검출)
+        # 종적 대조용 L4 밀도 격자 (post−pre로 골손실 부위 검출).
+        # trab_roi(피질골 테두리+상하 종판을 뺀 순수 해면골)를 쓴다 — 전체
+        # L4 mask를 쓰면 BAR가 일부러 제외하는, 가장 밝고 오염되기 쉬운 그
+        # 부위까지 격자에 섞여 헤드라인 BAR와 추세가 어긋나 보일 수 있다.
         density_grid = self._density_grid(
-            grid_src, mask, valid, low_anchor, high_anchor, settings.bmd_diff_grid_n
+            grid_src, trab_roi, valid, grid_low, grid_high,
+            settings.bmd_diff_grid_n,
         )
+        density_grid_aspect = self._mask_aspect_ratio(trab_roi)
 
         # Overlay: draw the actual segmentation polygon outline for every
         # detected vertebra. L4 (target) in red + light tint, others in blue.
@@ -2362,6 +2470,8 @@ class YoloBmdEngine(BmdInferenceEngine):
             density_high=round(high_anchor, 1),
             roi_mean_attenuation=roi_marker,
             l4_density_grid=density_grid,
+            l4_density_grid_aspect=density_grid_aspect,
+            l4_texture_regions=texture_regions,
             reliable=reliable,
             reliability_warning=reliability_warning,
             segments=segments,

@@ -1,0 +1,63 @@
+Hello, everyone,
+
+Thank you for attending the meeting.
+As promised, I've summarized the questions from the presentation and my responses below.
+
+[Q & A]
+Q: Before and after surgery image comparison — showing texture or density?
+
+A: Density only, not texture. (I'll add this feature in a future update)
+The software includes a Contrast Mode that overlays a per-region density-change grid calculated as post minus pre. Blue indicates decreased density, and red indicates increased density.
+Texture metrics (GLCM, Fractal Dimension, and BHI) are not included in this comparison.
+
+Q: Do you show this patient over time?
+A: Yes.
+Each patient page opens with a BMD trend chart, showing the patient's density values across all available studies. The percentage change from the previous exam is also displayed.
+
+Q: Can you show 100 patients?
+A: Yes.
+The patient list is a searchable, scrollable list (by name or MRN) with no fixed limit. However, the current interface is designed for reviewing one patient at a time rather than comparing multiple patients simultaneously.
+
+Q: Could you combine data from many patients?
+A: Not currently.(I'll add this feature in a future update)
+The software does not currently support combining or analyzing multiple patients together, but this feature could be added if needed 
+
+Q: What if there's a foreign body, such as cement, a bullet, or surgical hardware?
+A: I need to correct my earlier statement.
+I did build a metal detection algorithm, but I couldn't ship it because its reliability was too low to trust.
+So for now, metal contamination must be verified visually, and any density value in those regions should be treated as unreliable.
+I went back and reviewed the source code and my records, and I also noted this in my July 23rd report email.
+
+
+[Dr. Bansal's Feature Requests]
+
+1. Multiple X-ray Upload: Allow users to upload multiple X-ray files simultaneously.
+2. Edit X-ray Date: Allow users to modify the examination date of an uploaded X-ray.
+3. Save & Load Compare Results: Add the ability to save comparison results and reload them later.
+4. Five-Region Comparison: During comparison, divide the image into five regions (center, top-left, top-right, bottom-left, and bottom-right)
+   and display the increase or decrease for each region.
+5. Texture Comparison – Add a texture comparison feature(Suggested by me.)
+6. Multi-Patient Comparison – Allow comparison of X-ray files from multiple patients.
+
+Thank you for taking the time.
+
+Best,
+Edward Choi.
+
+
+1. X-ray 업로드시 멀티플 업로드 기능과 업로드한 X-ray파일의 날짜 변경기능을 넣어줘 그 날짜 순으로 x-ray 파일을 order 해줘. 기본적으로는 지금처럼 올린 시간으로 올라가게 해줘
+2. Texture 비교기능
+1) 팝업 버튼을 두개 만들어서 하나는 쉬운버전 하나는 어려운 버전 둘다 보여줘
+2) 비교한거 저장기능 (나중에 이 비교한 것을 다시 확인 할수 있도록
+3) 여러명의 사람들 골밀도 비교기능
+4) 비교화면에서 퍼센트로 표현하기
+5) 비교시 가운데 영역과 좌상, 우상, 좌하, 우하 5개 영역으로 영역별로 증감 표시하기
+
+This is Dr. Bansal request.
+1. X-ray 업로드시 여러개 파일 동시 업로드 기능
+2. 업로드한 X-ray파일의 날짜 변경기능
+3. Compare에서 compare한 내용 저장기능과 로딩기능
+4. 비교시 가운데 영역과 좌상, 우상, 좌하, 우하 5개 영역으로 영역별로 증감 표시하기
+5. Texture 비교기능 추가하기
+6. 여러사람의 x-ray파일 비교기능
+

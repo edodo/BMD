@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.models import StudyStatus, UserRole
+from app.models import ComparisonType, StudyStatus, UserRole
 
 
 # ---------- 공통 ----------
@@ -140,6 +140,10 @@ class BmdMeasurementOut(ORMBase):
     reliability_warning: str | None = None
     # 종적 대조용 L4 밀도 격자 (N×N, 0..1/None)
     l4_density_grid: list | None = None
+    # 위 격자의 실제 ROI bbox 가로/세로 비율 (프론트 격자 렌더링용)
+    l4_density_grid_aspect: float | None = None
+    # 종적 대조(텍스처, "detailed" 모드)용 5구역 텍스처 특징
+    l4_texture_regions: dict | None = None
     model_version: str | None
     computed_at: datetime
     segments: list[VertebraSegmentOut] = []
@@ -162,6 +166,12 @@ class XrayStudyListItem(ORMBase):
 
 class StudyNoteUpdate(BaseModel):
     note: str | None = None
+
+
+class StudyDateUpdate(BaseModel):
+    """촬영일 수동 지정/수정. History 정렬은 이 값(없으면 uploaded_at)을 쓴다."""
+
+    acquired_at: datetime
 
 
 class ViewOverrideIn(BaseModel):
@@ -223,3 +233,35 @@ class PrecisionCalibrationOut(ORMBase):
     rms_cv_pct: float
     lsc_pct: float
     computed_at: datetime
+
+
+# ---------- 저장된 비교 ----------
+class ComparisonCreate(BaseModel):
+    type: ComparisonType
+    title: str
+    patient_id: str | None = None
+    pre_study_id: str | None = None
+    post_study_ids: list[str] | None = None
+    patient_ids: list[str] | None = None
+    config: dict | None = None
+
+
+class ComparisonOut(ORMBase):
+    id: str
+    type: ComparisonType
+    title: str
+    patient_id: str | None = None
+    pre_study_id: str | None = None
+    post_study_ids: list[str] | None = None
+    patient_ids: list[str] | None = None
+    config: dict | None = None
+    created_at: datetime
+
+
+# ---------- 다중 환자 비교 ----------
+class MultiPatientBmdOut(BaseModel):
+    patient_id: str
+    patient_name: str
+    target_vertebra: str
+    points: list[BmdTrendPoint]
+    delta_percent: float | None = None

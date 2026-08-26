@@ -4,6 +4,14 @@
 export type StudyStatus = "uploaded" | "processing" | "completed" | "failed";
 export type UserRole = "admin" | "doctor" | "radiologist" | "viewer";
 
+export interface Doctor {
+  id: string;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  created_at: string;
+}
+
 export interface Patient {
   id: string;
   medical_record_no: string;
@@ -61,6 +69,26 @@ export interface VertebraSegment {
   category: string | null;
 }
 
+// 5구역 종적 대조가 공유하는 구역 이름 — 밀도(프론트 재집계)와 텍스처
+// (백엔드 계산) 양쪽에서 동일한 의미로 쓰인다.
+export type CompareRegionName =
+  | "center"
+  | "top_left"
+  | "top_right"
+  | "bottom_left"
+  | "bottom_right";
+
+export interface TextureRegionFeatures {
+  glcm_homogeneity: number | null;
+  glcm_entropy: number | null;
+  vario_slope: number | null;
+  fractal_dim: number | null;
+}
+
+export type TextureRegions = Partial<
+  Record<CompareRegionName, TextureRegionFeatures | null>
+>;
+
 export interface XaiFactor {
   label: string;
   contribution: number; // -1 ~ +1
@@ -93,6 +121,13 @@ export interface BmdMeasurement {
   reliability_warning: string | null;
   // 종적 대조용 L4 밀도 격자 (N×N, 0..1/null). post−pre로 골손실 부위 검출.
   l4_density_grid: (number | null)[][] | null;
+  // 위 격자의 실제 L4 ROI bbox 가로/세로 비율 (width/height) -- 격자를
+  // 정사각형이 아니라 실제 ROI 비율로 그리기 위함. N×N 셀 개수와는 무관.
+  l4_density_grid_aspect: number | null;
+  // 종적 대조(텍스처, "detailed" 모드)용 5구역 텍스처 특징. 셀 격자는
+  // GLCM/fractal/variogram에는 너무 잘게 쪼개져 무의미해지므로, 처음부터
+  // 중앙+네 모서리 5구역으로 계산된다. 표본이 너무 작은 구역은 null.
+  l4_texture_regions: TextureRegions | null;
   model_version: string | null;
   computed_at: string;
   segments: VertebraSegment[];
@@ -149,6 +184,40 @@ export interface BmdTrend {
   // 측정 정밀도(LSC%) — 보정 이력이 있으면 최신값, 없으면 null(미보정).
   lsc_percent: number | null;
   lsc_calibrated_at: string | null;
+}
+
+// ---------- 저장된 비교 ----------
+export type ComparisonType = "pre_post" | "multi_patient";
+
+export interface SavedComparison {
+  id: string;
+  type: ComparisonType;
+  title: string;
+  patient_id: string | null;
+  pre_study_id: string | null;
+  post_study_ids: string[] | null;
+  patient_ids: string[] | null;
+  config: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface ComparisonCreateInput {
+  type: ComparisonType;
+  title: string;
+  patient_id?: string | null;
+  pre_study_id?: string | null;
+  post_study_ids?: string[] | null;
+  patient_ids?: string[] | null;
+  config?: Record<string, unknown> | null;
+}
+
+// ---------- 다중 환자 비교 ----------
+export interface MultiPatientBmd {
+  patient_id: string;
+  patient_name: string;
+  target_vertebra: string;
+  points: BmdTrendPoint[];
+  delta_percent: number | null;
 }
 
 export interface PrecisionCalibration {

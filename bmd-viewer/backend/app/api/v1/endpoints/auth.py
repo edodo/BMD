@@ -6,6 +6,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_doctor
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.session import get_db
 from app.models import Doctor
@@ -48,3 +49,9 @@ async def login(
         )
     token = create_access_token(subject=doctor.id, role=doctor.role.value)
     return Token(access_token=token)
+
+
+@router.get("/me", response_model=DoctorOut)
+async def me(doctor: Doctor = Depends(get_current_doctor)):
+    """현재 로그인한 사용자 정보 — 상단바에 이름 표시용."""
+    return doctor

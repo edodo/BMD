@@ -67,7 +67,7 @@ autoencoder:
   - glcm_entropy
   - vario_slope
   - fractal_dim
-  n_cohort: 600
+  n_cohort: null
   hidden:
   - 16
   - 8

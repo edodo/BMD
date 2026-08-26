@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDataProvider } from "@/lib/data";
+import type { ComparisonCreateInput, ComparisonType } from "@/lib/types";
 
 const dp = getDataProvider();
 
@@ -25,6 +26,15 @@ export function useStudies(patientId: string | undefined) {
     queryKey: ["studies", patientId],
     queryFn: () => dp.listStudies(patientId!),
     enabled: !!patientId,
+    // 목록에 아직 uploaded/processing 상태인 항목이 있으면 폴링 (useStudy와
+    // 같은 이유) -- 여러 파일을 한꺼번에 올리면 대기열에 있는 동안 이 목록의
+    // 상태가 한동안 안 바뀌어 "Pending에 멈춘 것처럼" 보이는 걸 막는다.
+    refetchInterval: (q) => {
+      const active = q.state.data?.some(
+        (s) => s.status === "uploaded" || s.status === "processing"
+      );
+      return active ? 2000 : false;
+    },
   });
 }
 
@@ -123,6 +133,17 @@ export function useUpdateStudyNote(studyId: string) {
   });
 }
 
+export function useUpdateStudyDate(studyId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (acquiredAt: string) => dp.updateStudyDate(studyId, acquiredAt),
+    onSuccess: (updated) => {
+      qc.setQueryData(["study", studyId], updated);
+      qc.invalidateQueries({ queryKey: ["studies", updated.patient_id] });
+    },
+  });
+}
+
 export function useOverrideView(studyId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -150,6 +171,44 @@ export function useCalibratePrecision() {
       qc.invalidateQueries({ queryKey: ["lsc-calibration"] });
       // 보정값이 바뀌면 모든 환자의 추세 경고 판정이 달라질 수 있음
       qc.invalidateQueries({ queryKey: ["bmd-trend"] });
+    },
+  });
+}
+
+export function useMultiPatientBmd(patientIds: string[]) {
+  return useQuery({
+    queryKey: ["multi-patient-bmd", [...patientIds].sort()],
+    queryFn: () => dp.getMultiPatientBmd(patientIds),
+    enabled: patientIds.length > 0,
+  });
+}
+
+export function useCreateComparison() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ComparisonCreateInput) => dp.createComparison(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["comparisons"] });
+    },
+  });
+}
+
+export function useListComparisons(params?: {
+  patientId?: string;
+  type?: ComparisonType;
+}) {
+  return useQuery({
+    queryKey: ["comparisons", params?.patientId ?? "", params?.type ?? ""],
+    queryFn: () => dp.listComparisons(params),
+  });
+}
+
+export function useDeleteComparison() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => dp.deleteComparison(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["comparisons"] });
     },
   });
 }

@@ -4,9 +4,14 @@ import type { DataProvider } from "./provider";
 import type {
   AuthSession,
   BmdTrend,
+  ComparisonCreateInput,
+  ComparisonType,
+  Doctor,
+  MultiPatientBmd,
   Patient,
   PatientListItem,
   PrecisionCalibration,
+  SavedComparison,
   XrayStudyDetail,
   XrayStudyListItem,
 } from "@/lib/types";
@@ -17,7 +22,11 @@ export class RestDataProvider implements DataProvider {
   private http: AxiosInstance;
 
   constructor() {
-    this.http = axios.create({ baseURL: API_BASE });
+    // timeout 없으면 서버 재시작/네트워크 단절로 끊긴 요청이 응답도 에러도 없이
+    // 영원히 pending으로 남는다 -- 특히 업로드 대기열 UI에서 이러면 "..."가
+    // 영원히 안 없어지는 것처럼 보인다. 60초면 업로드+202 응답(추론 완료를
+    // 기다리지 않으므로 원래 빨라야 함)엔 충분히 여유 있다.
+    this.http = axios.create({ baseURL: API_BASE, timeout: 60000 });
     this.http.interceptors.request.use((config) => {
       const token = localStorage.getItem("bmd_token");
       if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -66,6 +75,11 @@ export class RestDataProvider implements DataProvider {
 
   logout(): void {
     localStorage.removeItem("bmd_token");
+  }
+
+  async getCurrentDoctor(): Promise<Doctor> {
+    const { data } = await this.http.get<Doctor>("/auth/me");
+    return data;
   }
 
   isAuthenticated(): boolean {
@@ -130,11 +144,57 @@ export class RestDataProvider implements DataProvider {
     return data;
   }
 
+  async updateStudyDate(
+    studyId: string,
+    acquiredAt: string
+  ): Promise<XrayStudyDetail> {
+    const { data } = await this.http.patch<XrayStudyDetail>(
+      `/studies/${studyId}/date`,
+      { acquired_at: acquiredAt }
+    );
+    return data;
+  }
+
   async getBmdTrend(patientId: string): Promise<BmdTrend> {
     const { data } = await this.http.get<BmdTrend>(
       `/patients/${patientId}/bmd-trend`
     );
     return data;
+  }
+
+  async getMultiPatientBmd(patientIds: string[]): Promise<MultiPatientBmd[]> {
+    const { data } = await this.http.get<MultiPatientBmd[]>(
+      "/comparisons/multi-patient-bmd",
+      { params: { patient_ids: patientIds.join(",") } }
+    );
+    return data;
+  }
+
+  async createComparison(
+    input: ComparisonCreateInput
+  ): Promise<SavedComparison> {
+    const { data } = await this.http.post<SavedComparison>(
+      "/comparisons",
+      input
+    );
+    return data;
+  }
+
+  async listComparisons(params?: {
+    patientId?: string;
+    type?: ComparisonType;
+  }): Promise<SavedComparison[]> {
+    const { data } = await this.http.get<SavedComparison[]>("/comparisons", {
+      params: {
+        patient_id: params?.patientId,
+        type: params?.type,
+      },
+    });
+    return data;
+  }
+
+  async deleteComparison(id: string): Promise<void> {
+    await this.http.delete(`/comparisons/${id}`);
   }
 
   async overrideView(
@@ -165,5 +225,13 @@ export class RestDataProvider implements DataProvider {
   assetUrl(path: string | null): string | null {
     if (!path) return null;
     return `/derived/${path}`;
+  }
+
+  densityDiffUrl(preStudyId: string, postStudyId: string): string {
+    const params = new URLSearchParams({
+      pre_study_id: preStudyId,
+      post_study_id: postStudyId,
+    });
+    return `${API_BASE}/comparisons/density-diff.png?${params}`;
   }
 }

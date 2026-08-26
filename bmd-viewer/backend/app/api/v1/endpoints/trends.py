@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_doctor
@@ -25,17 +25,22 @@ async def bmd_trend(
     if not patient or patient.doctor_id != doctor.id:
         raise HTTPException(status_code=404, detail="Patient not found")
 
+    # X축/정렬은 추론이 실행된 시각(computed_at)이 아니라 촬영일(acquired_at,
+    # History에서 의사가 직접 수정할 수 있는 그 값)을 써야 한다 -- 안 그러면
+    # 날짜를 고쳐도 추세선에는 반영되지 않는다. 촬영일이 없으면(추론 전 등)
+    # 업로드일로 대체 -- studies.py의 목록 정렬과 같은 fallback.
+    measured_key = func.coalesce(XrayStudy.acquired_at, XrayStudy.uploaded_at)
     rows = (
         await db.execute(
             select(
                 XrayStudy.id,
-                BmdMeasurement.computed_at,
+                measured_key,
                 BmdMeasurement.bmd_value,
                 BmdMeasurement.t_score,
             )
             .join(BmdMeasurement, BmdMeasurement.study_id == XrayStudy.id)
             .where(XrayStudy.patient_id == patient_id)
-            .order_by(BmdMeasurement.computed_at.asc())
+            .order_by(measured_key.asc())
         )
     ).all()
 

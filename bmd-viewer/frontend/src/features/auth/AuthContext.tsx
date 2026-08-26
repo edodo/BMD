@@ -3,15 +3,18 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useState,
   type ReactNode,
 } from "react";
 import { getDataProvider } from "@/lib/data";
+import type { Doctor } from "@/lib/types";
 
 const dp = getDataProvider();
 
 interface AuthContextValue {
   isAuthenticated: boolean;
+  doctor: Doctor | null;
   login: (email: string, password: string) => Promise<void>;
   register: (input: {
     email: string;
@@ -25,6 +28,20 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setAuthed] = useState(dp.isAuthenticated());
+  const [doctor, setDoctor] = useState<Doctor | null>(null);
+
+  // 토큰이 있는 상태(첫 로드 시 이미 로그인돼 있던 경우 포함)면 상단바에
+  // 보여줄 이름을 가져온다. 실패해도(토큰 만료 등) 조용히 넘어간다 -- 401
+  // 인터셉터가 이미 로그아웃 처리를 담당한다.
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setDoctor(null);
+      return;
+    }
+    dp.getCurrentDoctor()
+      .then(setDoctor)
+      .catch(() => setDoctor(null));
+  }, [isAuthenticated]);
 
   const login = async (email: string, password: string) => {
     await dp.login(email, password);
@@ -49,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ isAuthenticated, login, register, logout }}
+      value={{ isAuthenticated, doctor, login, register, logout }}
     >
       {children}
     </AuthContext.Provider>

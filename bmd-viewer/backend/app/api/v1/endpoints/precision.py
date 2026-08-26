@@ -3,29 +3,32 @@
 '유의미한 변화'의 기준(config.significantLossPct 하드코딩 10%)을 실제로 측정된
 값으로 바꾸기 위한 엔드포인트. 노트북 v18의 D0(precision_lsc)와 동일 산식이며,
 합성 데모 대신 이 배포에 실제 업로드된 스터디로 계산한다.
+
+실제 계산(표본 조회 + 재측정 + 저장)은 app/services/precision_calibration.py에
+공유돼 있다 -- 스터디가 완료될 때마다 자동으로도 같은 로직이 돌기 때문
+(inference_worker.schedule_auto_calibration). 이 엔드포인트는 그 자동 주기를
+기다리지 않고 지금 당장 강제로 재계산하고 싶을 때 쓴다.
 """
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_doctor
-from app.core.config import settings
 from app.db.session import get_db
-from app.models import Doctor, PrecisionCalibration, StudyStatus, XrayStudy
+from app.models import Doctor
 from app.schemas import PrecisionCalibrationOut
 from app.services.inference.engine import get_engine
+from app.services.precision_calibration import (
+    get_latest_calibration,
+    run_calibration,
+)
 
 router = APIRouter()
 
-# 최근 완료 스터디 중 이만큼만 표본으로 사용 (매번 전체 이력을 재측정하면
-# 스터디당 n_repeats회 추론이 들어가 느려짐 -- 보정은 자주 돌리는 작업이 아님).
-CALIBRATION_SAMPLE_SIZE = 8
-
 
 @router.get("/lsc", response_model=PrecisionCalibrationOut | None)
-async def get_latest_calibration(
+async def get_lsc(
     doctor: Doctor = Depends(get_current_doctor),
     db: AsyncSession = Depends(get_db),
 ):
@@ -33,14 +36,7 @@ async def get_latest_calibration(
     (프론트는 이 경우 '아직 보정되지 않음'을 명시해야 한다 — 조용히 임의의
     기본값으로 대체하면 노트북에서와 같은 '미검증 임계값' 문제가 되풀이된다).
     """
-    row = (
-        await db.execute(
-            select(PrecisionCalibration)
-            .order_by(PrecisionCalibration.computed_at.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-    return row
+    return await get_latest_calibration(db)
 
 
 @router.post("/calibrate", response_model=PrecisionCalibrationOut)
@@ -48,7 +44,8 @@ async def calibrate(
     doctor: Doctor = Depends(get_current_doctor),
     db: AsyncSession = Depends(get_db),
 ):
-    """완료된 스터디 중 최근 N개를 재위치 섭동으로 재측정해 LSC%를 재산출한다.
+    """완료된 스터디 전체(최대 안전 상한까지)를 재위치 섭동으로 재측정해
+    LSC%를 지금 즉시 재산출한다.
 
     doctor/patient에 종속되지 않는 시스템 속성이므로, 호출한 의사가 아니라
     전체 완료 스터디에서 표본을 뽑는다. 실제 YOLO 엔진이 필요하므로
@@ -62,41 +59,12 @@ async def calibrate(
             "engine (unavailable with BMD_INFERENCE_ENGINE=stub).",
         )
 
-    studies = (
-        (
-            await db.execute(
-                select(XrayStudy)
-                .where(XrayStudy.status == StudyStatus.COMPLETED)
-                .order_by(XrayStudy.uploaded_at.desc())
-                .limit(CALIBRATION_SAMPLE_SIZE)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    if len(studies) < 2:
+    row = await run_calibration(db)
+    if row is None:
         raise HTTPException(
             status_code=400,
-            detail=f"Need at least 2 completed studies to calibrate precision "
-            f"(have {len(studies)}). Upload more studies first.",
+            detail="Need at least 2 completed studies to calibrate precision, "
+            "or precision calibration failed on every sampled study. "
+            "Upload more studies first.",
         )
-
-    dicom_paths = [settings.dicom_dir / s.dicom_path for s in studies]
-    result = engine.measure_precision(dicom_paths)
-    if result is None:
-        raise HTTPException(
-            status_code=422,
-            detail="Precision calibration failed on every sampled study "
-            "(none produced 2+ usable repeat measurements).",
-        )
-
-    row = PrecisionCalibration(
-        n_studies=result["n_studies"],
-        n_repeats=result["n_repeats"],
-        rms_cv_pct=result["rms_cv_pct"],
-        lsc_pct=result["lsc_pct"],
-    )
-    db.add(row)
-    await db.commit()
-    await db.refresh(row)
     return row

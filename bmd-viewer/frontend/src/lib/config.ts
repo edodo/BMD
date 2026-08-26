@@ -9,7 +9,12 @@ export const config = {
   // (미검증 임의값 대신 실제 재위치 노이즈 기준 사용).
   significantLossPct: 10,
 
-  // 종적 대조(compare): post−pre 정규화 밀도 차이가 이 값보다 더 음수인
-  // 격자 셀을 '골손실 부위(붉은 격자)'로 표시.
-  compareBoneLossDelta: 0.05,
+  // 종적 대조(compare) 5구역 격자: post−pre 밀도 변화가 이 값(%포인트)보다
+  // 더 크면 증가(붉은색), 더 작으면(음수) 감소(파란색)로 표시.
+  compareRegionDeltaPct: 5,
+
+  // 픽셀 diff 이미지(density-diff.png) 밑에 표시하는 "↓N/↑M cells" 요약의
+  // 판정 기준. 이미지 자체는 서버가 렌더링하므로, 이 카운트는 프론트가 이미
+  // 갖고 있는 원본 NxN 격자로 별도 계산한다(원시 밀도 단위, 0..1 스케일).
+  comparePixelDeltaAbs: 0.05,
 };
